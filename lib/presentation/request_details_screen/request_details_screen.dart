@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
 import '../../core/widgets/custom_app_bar.dart';
-
 import '../../core/widgets/custom_buttom_bar.dart';
 import './widgets/headers_tab_widget.dart';
 import './widgets/overview_tab_widget.dart';
@@ -11,20 +11,13 @@ import './widgets/response_tab_widget.dart';
 import './widgets/timing_tab_widget.dart';
 
 /// Request Details Screen - Displays comprehensive information about individual network requests
-class RequestDetailsScreen extends StatefulWidget {
-  const RequestDetailsScreen({super.key});
+class RequestDetailsScreen extends StatelessWidget {
+  RequestDetailsScreen({super.key});
 
-  @override
-  State<RequestDetailsScreen> createState() => _RequestDetailsScreenState();
-}
+  final TrafficController trafficController = Get.find<TrafficController>();
 
-class _RequestDetailsScreenState extends State<RequestDetailsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  CustomBottomBarItem _selectedBottomBarItem = CustomBottomBarItem.requests;
-
-  // Mock request data
-  final Map<String, dynamic> _requestData = {
+  // Mock request data - in real app, this would come from arguments
+  final Map<String, dynamic> requestData = {
     'requestId': 'req_1735272568067',
     'url': 'https://api.example.com/v1/users/profile',
     'method': 'GET',
@@ -93,18 +86,6 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
   };
 
   @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
@@ -115,12 +96,8 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
         variant: CustomAppBarVariant.withBackButton,
         actions: [
           IconButton(
-            icon: CustomIconWidget(
-              iconName: 'share',
-              color: theme.colorScheme.onSurface,
-              size: 24,
-            ),
-            onPressed: _handleShare,
+            icon: CustomIconWidget(iconName: 'share', color: theme.colorScheme.onSurface, size: 24),
+            onPressed: handleShare,
             tooltip: 'Share request',
           ),
           IconButton(
@@ -129,43 +106,43 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
               color: theme.colorScheme.onSurface,
               size: 24,
             ),
-            onPressed: _showMoreOptions,
+            onPressed: showMoreOptions,
             tooltip: 'More options',
           ),
         ],
       ),
       body: Column(
         children: [
-          _buildRequestHeader(context),
-          _buildTabBar(context),
+          buildRequestHeader(context),
+          buildTabBar(context),
           Expanded(
             child: TabBarView(
-              controller: _tabController,
+              controller: trafficController.tabController,
               children: [
-                OverviewTabWidget(requestData: _requestData),
-                HeadersTabWidget(requestData: _requestData),
-                ResponseTabWidget(requestData: _requestData),
-                TimingTabWidget(requestData: _requestData),
+                OverviewTabWidget(requestData: requestData),
+                HeadersTabWidget(requestData: requestData),
+                ResponseTabWidget(requestData: requestData),
+                TimingTabWidget(requestData: requestData),
               ],
             ),
           ),
         ],
       ),
-      bottomNavigationBar: CustomBottomBar(
-        selectedItem: _selectedBottomBarItem,
-        onItemSelected: (item) {
-          setState(() => _selectedBottomBarItem = item);
-        },
+      bottomNavigationBar: Obx(
+        () => CustomBottomBar(
+          selectedItem: trafficController.selectedBottomBarItem.value,
+          onItemSelected: (item) => trafficController.selectedBottomBarItem.value = item,
+        ),
       ),
     );
   }
 
-  Widget _buildRequestHeader(BuildContext context) {
+  Widget buildRequestHeader(BuildContext context) {
     final theme = Theme.of(context);
-    final url = _requestData['url'] as String;
-    final method = _requestData['method'] as String;
-    final statusCode = _requestData['statusCode'] as int;
-    final timestamp = _requestData['timestamp'] as DateTime;
+    final url = requestData['url'] as String;
+    final method = requestData['method'] as String;
+    final statusCode = requestData['statusCode'] as int;
+    final timestamp = requestData['timestamp'] as DateTime;
 
     return Container(
       width: double.infinity,
@@ -173,10 +150,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.outline.withValues(alpha: 0.2),
-            width: 1,
-          ),
+          bottom: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2), width: 1),
         ),
       ),
       child: Column(
@@ -184,12 +158,12 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
         children: [
           Row(
             children: [
-              _buildMethodBadge(context, method),
+              buildMethodBadge(context, method),
               SizedBox(width: 2.w),
-              _buildStatusBadge(context, statusCode),
+              buildStatusBadge(context, statusCode),
               const Spacer(),
               Text(
-                _formatTimestamp(timestamp),
+                formatTimestamp(timestamp),
                 style: AppTheme.getCaptionMonospaceStyle(
                   isLight: theme.brightness == Brightness.light,
                   fontSize: 11,
@@ -199,7 +173,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
           ),
           SizedBox(height: 1.h),
           GestureDetector(
-            onLongPress: () => _copyToClipboard(context, url),
+            onLongPress: () => copyToClipboard(context, url),
             child: Text(
               url,
               style: AppTheme.getMonospaceStyle(
@@ -216,9 +190,9 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
     );
   }
 
-  Widget _buildMethodBadge(BuildContext context, String method) {
+  Widget buildMethodBadge(BuildContext context, String method) {
     final theme = Theme.of(context);
-    final color = _getMethodColor(method);
+    final color = getMethodColor(method);
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
@@ -238,9 +212,9 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
     );
   }
 
-  Widget _buildStatusBadge(BuildContext context, int statusCode) {
+  Widget buildStatusBadge(BuildContext context, int statusCode) {
     final theme = Theme.of(context);
-    final color = _getStatusColor(statusCode);
+    final color = getStatusColor(statusCode);
 
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
@@ -260,21 +234,18 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
     );
   }
 
-  Widget _buildTabBar(BuildContext context) {
+  Widget buildTabBar(BuildContext context) {
     final theme = Theme.of(context);
 
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.outline.withValues(alpha: 0.2),
-            width: 1,
-          ),
+          bottom: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2), width: 1),
         ),
       ),
       child: TabBar(
-        controller: _tabController,
+        controller: trafficController.tabController,
         tabs: const [
           Tab(text: 'Overview'),
           Tab(text: 'Headers'),
@@ -285,7 +256,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
     );
   }
 
-  Color _getMethodColor(String method) {
+  Color getMethodColor(String method) {
     switch (method.toUpperCase()) {
       case 'GET':
         return const Color(0xFF3182CE);
@@ -302,7 +273,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
     }
   }
 
-  Color _getStatusColor(int statusCode) {
+  Color getStatusColor(int statusCode) {
     if (statusCode >= 200 && statusCode < 300) {
       return const Color(0xFF38A169);
     } else if (statusCode >= 300 && statusCode < 400) {
@@ -315,7 +286,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
     return const Color(0xFF718096);
   }
 
-  String _formatTimestamp(DateTime timestamp) {
+  String formatTimestamp(DateTime timestamp) {
     final now = DateTime.now();
     final difference = now.difference(timestamp);
 
@@ -330,10 +301,10 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
     }
   }
 
-  void _handleShare() {
-    final theme = Theme.of(context);
+  void handleShare() {
+    final theme = Theme.of(Get.context!);
     showModalBottomSheet(
-      context: context,
+      context: Get.context!,
       builder: (context) => Container(
         padding: EdgeInsets.all(4.w),
         child: Column(
@@ -348,7 +319,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
               title: const Text('Export as cURL'),
               onTap: () {
                 Navigator.pop(context);
-                _showToast('Exported as cURL command');
+                Get.snackbar('Success', 'Exported as cURL command', duration: Duration(seconds: 2));
               },
             ),
             ListTile(
@@ -360,7 +331,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
               title: const Text('Export as JSON'),
               onTap: () {
                 Navigator.pop(context);
-                _showToast('Exported as JSON');
+                Get.snackbar('Success', 'Exported as JSON', duration: Duration(seconds: 2));
               },
             ),
             ListTile(
@@ -372,7 +343,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
               title: const Text('Export as HAR'),
               onTap: () {
                 Navigator.pop(context);
-                _showToast('Exported as HAR file');
+                Get.snackbar('Success', 'Exported as HAR file', duration: Duration(seconds: 2));
               },
             ),
           ],
@@ -381,10 +352,10 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
     );
   }
 
-  void _showMoreOptions() {
-    final theme = Theme.of(context);
+  void showMoreOptions() {
+    final theme = Theme.of(Get.context!);
     showModalBottomSheet(
-      context: context,
+      context: Get.context!,
       builder: (context) => Container(
         padding: EdgeInsets.all(4.w),
         child: Column(
@@ -399,7 +370,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
               title: const Text('Copy URL'),
               onTap: () {
                 Navigator.pop(context);
-                _copyToClipboard(context, _requestData['url'] as String);
+                copyToClipboard(Get.context!, requestData['url'] as String);
               },
             ),
             ListTile(
@@ -411,7 +382,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
               title: const Text('Replay Request'),
               onTap: () {
                 Navigator.pop(context);
-                _showToast('Request replayed');
+                Get.snackbar('Success', 'Request replayed', duration: Duration(seconds: 2));
               },
             ),
             ListTile(
@@ -420,13 +391,10 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
                 color: theme.colorScheme.error,
                 size: 24,
               ),
-              title: Text(
-                'Delete Request',
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
+              title: Text('Delete Request', style: TextStyle(color: theme.colorScheme.error)),
               onTap: () {
                 Navigator.pop(context);
-                _showToast('Request deleted');
+                Get.snackbar('Success', 'Request deleted', duration: Duration(seconds: 2));
               },
             ),
           ],
@@ -435,18 +403,9 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen>
     );
   }
 
-  void _copyToClipboard(BuildContext context, String text) {
+  void copyToClipboard(BuildContext context, String text) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Copied to clipboard'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  void _showToast(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+      SnackBar(content: Text('Copied to clipboard'), duration: const Duration(seconds: 2)),
     );
   }
 }

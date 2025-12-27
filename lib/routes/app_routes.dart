@@ -15,12 +15,12 @@ class AppRoutes {
   static const String analyticsDashboard = '/analytics-dashboard-screen';
 
   static Map<String, WidgetBuilder> routes = {
-    initial: (context) => const MainDashboardScreen(),
-    appSelection: (context) => const AppSelectionScreen(),
-    requestList: (context) => const RequestListScreen(),
-    mainDashboard: (context) => const MainDashboardScreen(),
-    requestDetails: (context) => const RequestDetailsScreen(),
-    analyticsDashboard: (context) => const AnalyticsDashboardScreen(),
+    initial: (context) =>  MainDashboardScreen(),
+    appSelection: (context) =>  AppSelectionScreen(),
+    requestList: (context) =>  RequestListScreen(),
+    mainDashboard: (context) =>  MainDashboardScreen(),
+    requestDetails: (context) =>  RequestDetailsScreen(),
+    analyticsDashboard: (context) =>  AnalyticsDashboardScreen(),
     // TODO: Add your other routes here
   };
 }

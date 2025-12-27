@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
@@ -10,26 +11,23 @@ import './widgets/section_header_widget.dart';
 
 /// App Selection Screen for configuring which applications to monitor
 /// Provides intuitive selection interface with search, filtering, and bulk operations
-class AppSelectionScreen extends StatefulWidget {
-  const AppSelectionScreen({super.key});
+class AppSelectionScreen extends StatelessWidget {
+  AppSelectionScreen({super.key});
 
-  @override
-  State<AppSelectionScreen> createState() => _AppSelectionScreenState();
-}
+  final CaptureController captureController = Get.put(CaptureController());
 
-class _AppSelectionScreenState extends State<AppSelectionScreen> {
   // Search and filter state
-  String _searchQuery = '';
-  bool _isSearchFocused = false;
-  final TextEditingController _searchController = TextEditingController();
+  RxString searchQuery = ''.obs;
+  RxBool isSearchFocused = false.obs;
+  final TextEditingController searchController = TextEditingController();
 
   // Selection state
-  final Set<String> _selectedApps = {};
-  bool _showSystemApps = true;
-  bool _showUserApps = true;
+  RxSet<String> selectedApps = <String>{}.obs;
+  RxBool showSystemApps = true.obs;
+  RxBool showUserApps = true.obs;
 
   // Refresh state
-  bool _isRefreshing = false;
+  RxBool isRefreshing = false.obs;
 
   // Mock data for installed applications
   final List<Map<String, dynamic>> _installedApps = [
@@ -37,10 +35,8 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
       "id": "com.android.chrome",
       "name": "Chrome",
       "packageName": "com.android.chrome",
-      "icon":
-          "https://img.rocket.new/generatedImages/rocket_gen_img_1f5d028f0-1764656770781.png",
-      "semanticLabel":
-          "Chrome browser icon with circular red, yellow, green, and blue design",
+      "icon": "https://img.rocket.new/generatedImages/rocket_gen_img_1f5d028f0-1764656770781.png",
+      "semanticLabel": "Chrome browser icon with circular red, yellow, green, and blue design",
       "isSystemApp": true,
       "lastActivity": DateTime.now().subtract(const Duration(minutes: 5)),
       "dataUsage": "45.2 MB",
@@ -50,10 +46,8 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
       "id": "com.google.android.gms",
       "name": "Google Play Services",
       "packageName": "com.google.android.gms",
-      "icon":
-          "https://img.rocket.new/generatedImages/rocket_gen_img_109f6385e-1764662428585.png",
-      "semanticLabel":
-          "Google Play Services icon with colorful triangle design",
+      "icon": "https://img.rocket.new/generatedImages/rocket_gen_img_109f6385e-1764662428585.png",
+      "semanticLabel": "Google Play Services icon with colorful triangle design",
       "isSystemApp": true,
       "lastActivity": DateTime.now().subtract(const Duration(minutes: 2)),
       "dataUsage": "128.5 MB",
@@ -63,10 +57,8 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
       "id": "com.android.vending",
       "name": "Google Play Store",
       "packageName": "com.android.vending",
-      "icon":
-          "https://img.rocket.new/generatedImages/rocket_gen_img_109f6385e-1764662428585.png",
-      "semanticLabel":
-          "Google Play Store icon with colorful triangle play button",
+      "icon": "https://img.rocket.new/generatedImages/rocket_gen_img_109f6385e-1764662428585.png",
+      "semanticLabel": "Google Play Store icon with colorful triangle play button",
       "isSystemApp": true,
       "lastActivity": DateTime.now().subtract(const Duration(hours: 1)),
       "dataUsage": "23.8 MB",
@@ -76,10 +68,8 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
       "id": "com.whatsapp",
       "name": "WhatsApp",
       "packageName": "com.whatsapp",
-      "icon":
-          "https://img.rocket.new/generatedImages/rocket_gen_img_1b3def8dd-1764662218645.png",
-      "semanticLabel":
-          "WhatsApp icon with green background and white phone symbol",
+      "icon": "https://img.rocket.new/generatedImages/rocket_gen_img_1b3def8dd-1764662218645.png",
+      "semanticLabel": "WhatsApp icon with green background and white phone symbol",
       "isSystemApp": false,
       "lastActivity": DateTime.now().subtract(const Duration(minutes: 15)),
       "dataUsage": "67.3 MB",
@@ -89,10 +79,8 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
       "id": "com.instagram.android",
       "name": "Instagram",
       "packageName": "com.instagram.android",
-      "icon":
-          "https://img.rocket.new/generatedImages/rocket_gen_img_1578531c9-1765127398454.png",
-      "semanticLabel":
-          "Instagram icon with gradient background and camera symbol",
+      "icon": "https://img.rocket.new/generatedImages/rocket_gen_img_1578531c9-1765127398454.png",
+      "semanticLabel": "Instagram icon with gradient background and camera symbol",
       "isSystemApp": false,
       "lastActivity": DateTime.now().subtract(const Duration(minutes: 30)),
       "dataUsage": "156.7 MB",
@@ -102,10 +90,8 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
       "id": "com.spotify.music",
       "name": "Spotify",
       "packageName": "com.spotify.music",
-      "icon":
-          "https://images.unsplash.com/photo-1658489958427-325ded050829",
-      "semanticLabel":
-          "Spotify icon with green background and white sound waves",
+      "icon": "https://images.unsplash.com/photo-1658489958427-325ded050829",
+      "semanticLabel": "Spotify icon with green background and white sound waves",
       "isSystemApp": false,
       "lastActivity": DateTime.now().subtract(const Duration(hours: 2)),
       "dataUsage": "89.4 MB",
@@ -115,10 +101,8 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
       "id": "com.twitter.android",
       "name": "Twitter",
       "packageName": "com.twitter.android",
-      "icon":
-          "https://images.unsplash.com/photo-1667235326880-324e1a51d40b",
-      "semanticLabel":
-          "Twitter icon with blue background and white bird symbol",
+      "icon": "https://images.unsplash.com/photo-1667235326880-324e1a51d40b",
+      "semanticLabel": "Twitter icon with blue background and white bird symbol",
       "isSystemApp": false,
       "lastActivity": DateTime.now().subtract(const Duration(minutes: 45)),
       "dataUsage": "34.2 MB",
@@ -128,8 +112,7 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
       "id": "com.facebook.katana",
       "name": "Facebook",
       "packageName": "com.facebook.katana",
-      "icon":
-          "https://img.rocket.new/generatedImages/rocket_gen_img_10c75a2a9-1766489371419.png",
+      "icon": "https://img.rocket.new/generatedImages/rocket_gen_img_10c75a2a9-1766489371419.png",
       "semanticLabel": "Facebook icon with blue background and white f letter",
       "isSystemApp": false,
       "lastActivity": DateTime.now().subtract(const Duration(hours: 3)),
@@ -140,8 +123,7 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
       "id": "com.google.android.youtube",
       "name": "YouTube",
       "packageName": "com.google.android.youtube",
-      "icon":
-          "https://img.rocket.new/generatedImages/rocket_gen_img_1cf52285e-1764675872914.png",
+      "icon": "https://img.rocket.new/generatedImages/rocket_gen_img_1cf52285e-1764675872914.png",
       "semanticLabel": "YouTube icon with red background and white play button",
       "isSystemApp": false,
       "lastActivity": DateTime.now().subtract(const Duration(minutes: 20)),
@@ -152,10 +134,8 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
       "id": "com.android.settings",
       "name": "Settings",
       "packageName": "com.android.settings",
-      "icon":
-          "https://img.rocket.new/generatedImages/rocket_gen_img_1422638a1-1765366081051.png",
-      "semanticLabel":
-          "Settings icon with gray gear symbol on white background",
+      "icon": "https://img.rocket.new/generatedImages/rocket_gen_img_1422638a1-1765366081051.png",
+      "semanticLabel": "Settings icon with gray gear symbol on white background",
       "isSystemApp": true,
       "lastActivity": DateTime.now().subtract(const Duration(hours: 5)),
       "dataUsage": "2.1 MB",
@@ -163,130 +143,85 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
     },
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    // Initialize with some apps already selected
-    _selectedApps.addAll([
-      "com.android.chrome",
-      "com.whatsapp",
-      "com.instagram.android",
-    ]);
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
   // Filter apps based on search query
-  List<Map<String, dynamic>> get _filteredApps {
-    if (_searchQuery.isEmpty) {
+  List<Map<String, dynamic>> get filteredApps {
+    if (searchQuery.value.isEmpty) {
       return _installedApps;
     }
 
     return _installedApps.where((app) {
       final name = (app["name"] as String).toLowerCase();
       final packageName = (app["packageName"] as String).toLowerCase();
-      final query = _searchQuery.toLowerCase();
+      final query = searchQuery.value.toLowerCase();
       return name.contains(query) || packageName.contains(query);
     }).toList();
   }
 
   // Get system apps
-  List<Map<String, dynamic>> get _systemApps {
-    return _filteredApps.where((app) => app["isSystemApp"] == true).toList();
+  List<Map<String, dynamic>> get systemApps {
+    return filteredApps.where((app) => app["isSystemApp"] == true).toList();
   }
 
   // Get user apps
-  List<Map<String, dynamic>> get _userApps {
-    return _filteredApps.where((app) => app["isSystemApp"] == false).toList();
+  List<Map<String, dynamic>> get userApps {
+    return filteredApps.where((app) => app["isSystemApp"] == false).toList();
   }
 
   // Handle app selection toggle
-  void _toggleAppSelection(String appId) {
-    setState(() {
-      if (_selectedApps.contains(appId)) {
-        _selectedApps.remove(appId);
-      } else {
-        _selectedApps.add(appId);
-      }
-    });
+  void selectAll() {
+    selectedApps.addAll(filteredApps.map((app) => app["id"] as String));
   }
 
-  // Handle select all
-  void _selectAll() {
-    setState(() {
-      _selectedApps.addAll(_filteredApps.map((app) => app["id"] as String));
-    });
+  void clearAll() {
+    selectedApps.clear();
   }
 
-  // Handle clear all
-  void _clearAll() {
-    setState(() {
-      _selectedApps.clear();
-    });
-  }
-
-  // Handle pull to refresh
-  Future<void> _handleRefresh() async {
-    setState(() {
-      _isRefreshing = true;
-    });
-
-    // Simulate refresh delay
-    await Future.delayed(const Duration(seconds: 1));
-
-    setState(() {
-      _isRefreshing = false;
-    });
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('App list updated'),
-          duration: Duration(seconds: 2),
-        ),
-      );
+  // Toggle app selection
+  void toggleAppSelection(String appId) {
+    if (selectedApps.contains(appId)) {
+      selectedApps.remove(appId);
+    } else {
+      selectedApps.add(appId);
     }
   }
 
+  Future<void> handleRefresh() async {
+    isRefreshing.value = true;
+    await Future.delayed(const Duration(seconds: 1));
+    isRefreshing.value = false;
+    Get.snackbar('Success', 'App list updated', duration: Duration(seconds: 2));
+  }
+
+  // Handle select all
+
   // Handle search query change
-  void _onSearchChanged(String query) {
-    setState(() {
-      _searchQuery = query;
-    });
+  void onSearchChanged(String query) {
+    searchQuery.value = query;
   }
 
   // Handle search focus change
-  void _onSearchFocusChanged(bool focused) {
-    setState(() {
-      _isSearchFocused = focused;
-    });
+  void onSearchFocusChanged(bool focused) {
+    isSearchFocused.value = focused;
   }
 
   // Handle done button press
-  void _handleDone() {
+  void handleDone() {
     // Save selection and navigate back
-    Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${_selectedApps.length} apps selected for monitoring'),
-        duration: const Duration(seconds: 2),
-      ),
+    Get.back();
+    Get.snackbar(
+      'Success',
+      '${selectedApps.length} apps selected for monitoring',
+      duration: Duration(seconds: 2),
     );
   }
 
   // Handle section toggle
-  void _toggleSection(bool isSystemApps) {
-    setState(() {
-      if (isSystemApps) {
-        _showSystemApps = !_showSystemApps;
-      } else {
-        _showUserApps = !_showUserApps;
-      }
-    });
+  void toggleSection(bool isSystemApps) {
+    if (isSystemApps) {
+      showSystemApps.value = !showSystemApps.value;
+    } else {
+      showUserApps.value = !showUserApps.value;
+    }
   }
 
   @override
@@ -308,18 +243,20 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
                 color: theme.colorScheme.secondary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: Text(
-                '${_selectedApps.length} selected',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.secondary,
-                  fontWeight: FontWeight.w600,
+              child: Obx(
+                () => Text(
+                  '${selectedApps.length} selected',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.secondary,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
           ),
           // Done button
           TextButton(
-            onPressed: _handleDone,
+            onPressed: handleDone,
             child: Text(
               'Done',
               style: theme.textTheme.titleMedium?.copyWith(
@@ -334,10 +271,10 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
         children: [
           // Search bar
           SearchBarWidget(
-            controller: _searchController,
-            onChanged: _onSearchChanged,
-            onFocusChanged: _onSearchFocusChanged,
-            isFocused: _isSearchFocused,
+            controller: searchController,
+            onChanged: onSearchChanged,
+            onFocusChanged: onSearchFocusChanged,
+            isFocused: isSearchFocused.value,
           ),
 
           // Bulk action buttons
@@ -347,20 +284,16 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: _selectAll,
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 1.5.h),
-                    ),
+                    onPressed: selectAll,
+                    style: OutlinedButton.styleFrom(padding: EdgeInsets.symmetric(vertical: 1.5.h)),
                     child: Text('Select All'),
                   ),
                 ),
                 SizedBox(width: 3.w),
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: _clearAll,
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 1.5.h),
-                    ),
+                    onPressed: clearAll,
+                    style: OutlinedButton.styleFrom(padding: EdgeInsets.symmetric(vertical: 1.5.h)),
                     child: Text('Clear All'),
                   ),
                 ),
@@ -371,48 +304,46 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
           // App list
           Expanded(
             child: RefreshIndicator(
-              onRefresh: _handleRefresh,
-              child: _filteredApps.isEmpty
-                  ? _buildEmptyState()
+              onRefresh: handleRefresh,
+              child: filteredApps.isEmpty
+                  ? _buildEmptyState(context)
                   : ListView(
                       padding: EdgeInsets.symmetric(vertical: 1.h),
                       children: [
                         // System Apps Section
-                        if (_systemApps.isNotEmpty) ...[
+                        if (systemApps.isNotEmpty) ...[
                           SectionHeaderWidget(
                             title: 'System Apps',
-                            count: _systemApps.length,
-                            isExpanded: _showSystemApps,
-                            onToggle: () => _toggleSection(true),
+                            count: systemApps.length,
+                            isExpanded: showSystemApps.value,
+                            onToggle: () => toggleSection(true),
                           ),
-                          if (_showSystemApps)
-                            ..._systemApps.map(
+                          if (showSystemApps.value)
+                            ...systemApps.map(
                               (app) => AppListItemWidget(
                                 app: app,
-                                isSelected: _selectedApps.contains(app["id"]),
-                                onToggle: () =>
-                                    _toggleAppSelection(app["id"] as String),
-                                onTap: () => _showAppDetails(app),
+                                isSelected: selectedApps.contains(app["id"]),
+                                onToggle: () => toggleAppSelection(app["id"] as String),
+                                onTap: () => showAppDetails(app),
                               ),
                             ),
                         ],
 
                         // User Apps Section
-                        if (_userApps.isNotEmpty) ...[
+                        if (userApps.isNotEmpty) ...[
                           SectionHeaderWidget(
                             title: 'User Apps',
-                            count: _userApps.length,
-                            isExpanded: _showUserApps,
-                            onToggle: () => _toggleSection(false),
+                            count: userApps.length,
+                            isExpanded: showUserApps.value,
+                            onToggle: () => toggleSection(false),
                           ),
-                          if (_showUserApps)
-                            ..._userApps.map(
+                          if (showUserApps.value)
+                            ...userApps.map(
                               (app) => AppListItemWidget(
                                 app: app,
-                                isSelected: _selectedApps.contains(app["id"]),
-                                onToggle: () =>
-                                    _toggleAppSelection(app["id"] as String),
-                                onTap: () => _showAppDetails(app),
+                                isSelected: selectedApps.contains(app["id"]),
+                                onToggle: () => toggleAppSelection(app["id"] as String),
+                                onTap: () => showAppDetails(app),
                               ),
                             ),
                         ],
@@ -434,7 +365,7 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
   }
 
   // Build empty state
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
     final theme = Theme.of(context);
 
     return Center(
@@ -449,15 +380,11 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
           SizedBox(height: 2.h),
           Text(
             'No apps found',
-            style: theme.textTheme.titleLarge?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+            style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           SizedBox(height: 1.h),
           Text(
-            _searchQuery.isEmpty
-                ? 'No applications installed'
-                : 'Try a different search term',
+            searchQuery.value.isEmpty ? 'No applications installed' : 'Try a different search term',
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
             ),
@@ -468,15 +395,13 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
   }
 
   // Show app details dialog
-  void _showAppDetails(Map<String, dynamic> app) {
-    final theme = Theme.of(context);
+  void showAppDetails(Map<String, dynamic> app) {
+    final theme = Theme.of(Get.context!);
 
     showModalBottomSheet(
-      context: context,
+      context: Get.context!,
       backgroundColor: theme.colorScheme.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => Container(
         padding: EdgeInsets.all(4.w),
         child: Column(
@@ -501,10 +426,7 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        app["name"] as String,
-                        style: theme.textTheme.titleLarge,
-                      ),
+                      Text(app["name"] as String, style: theme.textTheme.titleLarge),
                       SizedBox(height: 0.5.h),
                       Text(
                         app["packageName"] as String,
@@ -528,11 +450,7 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
               _formatLastActivity(app["lastActivity"] as DateTime),
               theme,
             ),
-            _buildStatRow(
-              'Type',
-              (app["isSystemApp"] as bool) ? 'System App' : 'User App',
-              theme,
-            ),
+            _buildStatRow('Type', (app["isSystemApp"] as bool) ? 'System App' : 'User App', theme),
 
             SizedBox(height: 3.h),
 
@@ -557,20 +475,16 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      Navigator.pop(context);
-                      _toggleAppSelection(app["id"] as String);
+                      Get.back();
+                      toggleAppSelection(app["id"] as String);
                     },
                     icon: CustomIconWidget(
-                      iconName: _selectedApps.contains(app["id"])
-                          ? 'check_circle'
-                          : 'add_circle',
+                      iconName: selectedApps.contains(app["id"]) ? 'check_circle' : 'add_circle',
                       size: 20,
                       color: theme.colorScheme.onSecondary,
                     ),
-                    label: Text(
-                      _selectedApps.contains(app["id"])
-                          ? 'Monitoring'
-                          : 'Monitor',
+                    label: Obx(
+                      () => Text(selectedApps.contains(app["id"]) ? 'Monitoring' : 'Monitor'),
                     ),
                   ),
                 ),
@@ -593,16 +507,9 @@ class _AppSelectionScreenState extends State<AppSelectionScreen> {
         children: [
           Text(
             label,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
+            style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
-          Text(
-            value,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          Text(value, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
         ],
       ),
     );
