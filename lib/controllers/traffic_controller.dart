@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/captured_request.dart';
 import '../core/widgets/custom_buttom_bar.dart';
 
-class TrafficController extends GetxController with GetSingleTickerProviderStateMixin {
+class TrafficController extends GetxController with GetTickerProviderStateMixin {
   // Requests data
   RxList<CapturedRequest> requests = <CapturedRequest>[].obs;
 
@@ -33,14 +34,82 @@ class TrafficController extends GetxController with GetSingleTickerProviderState
   // Bottom bar selection
   Rx<CustomBottomBarItem> selectedBottomBarItem = CustomBottomBarItem.requests.obs;
 
+  // Event Channel
+  static const eventChannel = EventChannel('com.example.packet_capture/events');
+
   @override
   void onInit() {
     super.onInit();
-    _initializeMockData();
     requestListTabController = TabController(length: 4, vsync: this);
     tabController = TabController(length: 4, vsync: this);
-    filteredRequests.assignAll(allRequests);
+
+    // Subscribe to native stream
+    eventChannel.receiveBroadcastStream().listen(_onEvent, onError: _onError);
+
+    filteredRequests.assignAll(allRequests); // Initially empty
     _loadPersistentFilters();
+  }
+
+  void _onEvent(dynamic event) {
+    print(
+      "Flutter: Traffic event received: ${event.toString().substring(0, event.toString().length > 100 ? 100 : event.toString().length)}...",
+    ); // Log reception
+
+    if (event is Map) {
+      try {
+        final request = CapturedRequest.fromJson(event);
+        print(
+          "Flutter: Parsed packet: ${request.protocol} ${request.method} -> ${request.url}",
+        ); // Log parsing
+
+        // 1. Filter CONNECT / Tunnel events
+        if (request.method == "CONNECT") {
+          print("Flutter: Skipped CONNECT event (tunnel establishment)");
+          return;
+        }
+
+        // 2. Filter events without App Package (Background/System/Unknown)
+        if (request.appPackage == null || request.appPackage!.isEmpty) {
+          print("Flutter: Skipped event (no app package/icon)");
+          return;
+        }
+
+        // 3. Filter empty payload (Keep-alives/ACKs without data)
+        // Assuming requestSize is num
+        if (request.requestSize <= 0) {
+          print("Flutter: Skipped event (empty payload)");
+          return;
+        }
+
+        final requestMap = {
+          "id": request.id,
+          "appName": request.appName ?? "Unknown",
+          "appPackage": request.appPackage ?? "",
+          "appIcon": "", // No icon for now, placeholder or fetch usage
+          "semanticLabel": "App Icon",
+          "destinationUrl": request.url,
+          "domain": request.domain,
+          "method": request.method,
+          "protocol": request.protocol,
+          "statusCode": request.statusCode,
+          "timestamp": request.timestamp,
+          "requestSize": "${request.requestSize} B",
+          "responseSize": "0 B", // Streaming upload usually
+          "responseTime": "${request.responseTime} ms",
+          "headers": request.headers,
+        };
+
+        allRequests.insert(0, requestMap);
+        print("Flutter: Traffic list size updated: ${allRequests.length}"); // Log update
+        applyFiltersAndSort();
+      } catch (e) {
+        print("Error parsing event: $e");
+      }
+    }
+  }
+
+  void _onError(Object error) {
+    print("EventChannel Error: $error");
   }
 
   @override
@@ -50,154 +119,7 @@ class TrafficController extends GetxController with GetSingleTickerProviderState
     super.onClose();
   }
 
-  void _initializeMockData() {
-    allRequests.assignAll([
-      {
-        "id": "req_001",
-        "appName": "Chrome Browser",
-        "appPackage": "com.android.chrome",
-        "appIcon":
-            "https://img.rocket.new/generatedImages/rocket_gen_img_1f5d028f0-1764656770781.png",
-        "semanticLabel":
-            "Chrome browser icon with red, yellow, green, and blue colors in circular design",
-        "destinationUrl": "https://api.github.com/users/octocat",
-        "domain": "api.github.com",
-        "method": "GET",
-        "protocol": "HTTPS",
-        "statusCode": 200,
-        "timestamp": DateTime.now().subtract(const Duration(minutes: 5)),
-        "requestSize": "2.4 KB",
-        "responseSize": "15.8 KB",
-        "responseTime": "245 ms",
-        "headers": {"Content-Type": "application/json", "User-Agent": "Chrome/120.0.0.0"},
-      },
-      {
-        "id": "req_002",
-        "appName": "Instagram",
-        "appPackage": "com.instagram.android",
-        "appIcon": "https://images.unsplash.com/photo-1666408738188-212c470d08b0",
-        "semanticLabel": "Instagram app icon with gradient colors from purple to orange",
-        "destinationUrl": "https://i.instagram.com/api/v1/feed/timeline",
-        "domain": "i.instagram.com",
-        "method": "POST",
-        "protocol": "HTTPS",
-        "statusCode": 200,
-        "timestamp": DateTime.now().subtract(const Duration(minutes: 12)),
-        "requestSize": "5.2 KB",
-        "responseSize": "128.5 KB",
-        "responseTime": "892 ms",
-        "headers": {"Content-Type": "application/json", "Authorization": "Bearer token_hidden"},
-      },
-      {
-        "id": "req_003",
-        "appName": "WhatsApp",
-        "appPackage": "com.whatsapp",
-        "appIcon":
-            "https://img.rocket.new/generatedImages/rocket_gen_img_1b3def8dd-1764662218645.png",
-        "semanticLabel": "WhatsApp messenger icon with green background and white phone symbol",
-        "destinationUrl": "https://web.whatsapp.com/ws",
-        "domain": "web.whatsapp.com",
-        "method": "GET",
-        "protocol": "WebSocket",
-        "statusCode": 101,
-        "timestamp": DateTime.now().subtract(const Duration(hours: 1)),
-        "requestSize": "1.2 KB",
-        "responseSize": "0 KB",
-        "responseTime": "156 ms",
-        "headers": {"Upgrade": "websocket", "Connection": "Upgrade"},
-      },
-      {
-        "id": "req_004",
-        "appName": "YouTube",
-        "appPackage": "com.google.android.youtube",
-        "appIcon":
-            "https://img.rocket.new/generatedImages/rocket_gen_img_18583e273-1764662218552.png",
-        "semanticLabel": "YouTube app icon with red play button on white background",
-        "destinationUrl": "https://www.youtube.com/youtubei/v1/player",
-        "domain": "www.youtube.com",
-        "method": "POST",
-        "protocol": "HTTPS",
-        "statusCode": 200,
-        "timestamp": DateTime.now().subtract(const Duration(hours: 2)),
-        "requestSize": "8.7 KB",
-        "responseSize": "256.3 KB",
-        "responseTime": "1245 ms",
-        "headers": {"Content-Type": "application/json", "X-YouTube-Client-Name": "1"},
-      },
-      {
-        "id": "req_005",
-        "appName": "Gmail",
-        "appPackage": "com.google.android.gm",
-        "appIcon":
-            "https://img.rocket.new/generatedImages/rocket_gen_img_116066d30-1764656771637.png",
-        "semanticLabel": "Gmail app icon with red and white envelope design",
-        "destinationUrl": "https://mail.google.com/sync/u/0/i/s",
-        "domain": "mail.google.com",
-        "method": "POST",
-        "protocol": "HTTPS",
-        "statusCode": 200,
-        "timestamp": DateTime.now().subtract(const Duration(hours: 3)),
-        "requestSize": "3.1 KB",
-        "responseSize": "45.2 KB",
-        "responseTime": "567 ms",
-        "headers": {"Content-Type": "application/json", "Authorization": "Bearer token_hidden"},
-      },
-      {
-        "id": "req_006",
-        "appName": "Spotify",
-        "appPackage": "com.spotify.music",
-        "appIcon":
-            "https://img.rocket.new/generatedImages/rocket_gen_img_1d71ebfa2-1764751041051.png",
-        "semanticLabel": "Spotify app icon with green background and black circular logo",
-        "destinationUrl": "https://api.spotify.com/v1/me/player",
-        "domain": "api.spotify.com",
-        "method": "GET",
-        "protocol": "HTTPS",
-        "statusCode": 200,
-        "timestamp": DateTime.now().subtract(const Duration(hours: 4)),
-        "requestSize": "1.8 KB",
-        "responseSize": "12.4 KB",
-        "responseTime": "234 ms",
-        "headers": {"Content-Type": "application/json", "Authorization": "Bearer token_hidden"},
-      },
-      {
-        "id": "req_007",
-        "appName": "Twitter",
-        "appPackage": "com.twitter.android",
-        "appIcon": "https://images.unsplash.com/photo-1667235326880-324e1a51d40b",
-        "semanticLabel": "Twitter app icon with blue bird logo on white background",
-        "destinationUrl": "https://api.twitter.com/2/timeline/home.json",
-        "domain": "api.twitter.com",
-        "method": "GET",
-        "protocol": "HTTPS",
-        "statusCode": 200,
-        "timestamp": DateTime.now().subtract(const Duration(hours: 5)),
-        "requestSize": "2.9 KB",
-        "responseSize": "89.7 KB",
-        "responseTime": "678 ms",
-        "headers": {"Content-Type": "application/json", "Authorization": "Bearer token_hidden"},
-      },
-      {
-        "id": "req_008",
-        "appName": "Netflix",
-        "appPackage": "com.netflix.mediaclient",
-        "appIcon": "https://images.unsplash.com/photo-1662338035252-74cdac76bd2a",
-        "semanticLabel": "Netflix app icon with red background and white N logo",
-        "destinationUrl": "https://www.netflix.com/api/shakti/browse",
-        "domain": "www.netflix.com",
-        "method": "GET",
-        "protocol": "HTTPS",
-        "statusCode": 200,
-        "timestamp": DateTime.now().subtract(const Duration(hours: 6)),
-        "requestSize": "4.5 KB",
-        "responseSize": "342.1 KB",
-        "responseTime": "1567 ms",
-        "headers": {"Content-Type": "application/json", "Cookie": "session_hidden"},
-      },
-    ]);
-  }
-
-  // Load persistent filters from storage
+  // Loaded persistent filters from storage
   Future<void> _loadPersistentFilters() async {
     final prefs = await SharedPreferences.getInstance();
     blockedDomains.assignAll((prefs.getStringList('blocked_domains') ?? []).toSet());

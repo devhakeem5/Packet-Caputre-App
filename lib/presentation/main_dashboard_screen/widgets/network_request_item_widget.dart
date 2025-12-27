@@ -71,7 +71,7 @@ class NetworkRequestItemWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
+    print(request);
     return Slidable(
       key: ValueKey(request["id"]),
       endActionPane: ActionPane(
@@ -107,10 +107,7 @@ class NetworkRequestItemWidget extends StatelessWidget {
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: theme.colorScheme.outline.withValues(alpha: 0.3),
-              width: 1,
-            ),
+            border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.3), width: 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,13 +116,19 @@ class NetworkRequestItemWidget extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: CustomImageWidget(
-                      imageUrl: request["appIcon"] as String,
-                      width: 40,
-                      height: 40,
-                      fit: BoxFit.cover,
-                      semanticLabel: request["appIconSemanticLabel"] as String,
-                    ),
+                    child:
+                        (request["appIcon"] != null && request['appIcon'].isNotEmpty()) ||
+                            (request["appIconSemanticLabel"] != null &&
+                                (
+                                    request["appIconSemanticLabel"] != 'App Icon'))
+                        ? CustomImageWidget(
+                            imageUrl: request["appIcon"] as String,
+                            width: 40,
+                            height: 40,
+                            fit: BoxFit.cover,
+                            semanticLabel: request["appIconSemanticLabel"] as String? ?? '',
+                          )
+                        : Icon(Icons.apps_outlined),
                   ),
                   SizedBox(width: 3.w),
                   Expanded(
@@ -133,16 +136,14 @@ class NetworkRequestItemWidget extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          request["appName"] as String,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                          request["appName"] as String? ?? 'appName',
+                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                         SizedBox(height: 0.25.h),
                         Text(
-                          request["packageName"] as String,
+                          request["appPackage"] as String,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -154,10 +155,7 @@ class NetworkRequestItemWidget extends StatelessWidget {
                   ),
                   SizedBox(width: 2.w),
                   Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 2.w,
-                      vertical: 0.5.h,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
                     decoration: BoxDecoration(
                       color: _getProtocolColor(
                         request["protocol"] as String,
@@ -179,14 +177,9 @@ class NetworkRequestItemWidget extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 2.w,
-                      vertical: 0.5.h,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
                     decoration: BoxDecoration(
-                      color: _getMethodColor(
-                        request["method"] as String,
-                      ).withValues(alpha: 0.1),
+                      color: _getMethodColor(request["method"] as String).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -201,10 +194,8 @@ class NetworkRequestItemWidget extends StatelessWidget {
                   SizedBox(width: 2.w),
                   Expanded(
                     child: Text(
-                      request["hostname"] as String,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
+                      request["domain"] as String,
+                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -240,7 +231,7 @@ class NetworkRequestItemWidget extends StatelessWidget {
                       ),
                       SizedBox(width: 1.w),
                       Text(
-                        request["dataSize"] as String,
+                        request["requestSize"] as String,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),

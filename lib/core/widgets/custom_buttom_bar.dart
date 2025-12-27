@@ -100,8 +100,8 @@ class CustomBottomBar extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Container(
-          height: 64, // Standard bottom nav height
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          height: 70, // Standard bottom nav height
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: CustomBottomBarItem.values.map((item) {
@@ -116,11 +116,9 @@ class CustomBottomBar extends StatelessWidget {
                   isSelected: isSelected,
                   showLabel: showLabels,
                   onTap: () => _handleItemTap(context, item),
-                  selectedColor:
-                      bottomNavTheme.selectedItemColor ?? colorScheme.secondary,
+                  selectedColor: bottomNavTheme.selectedItemColor ?? colorScheme.secondary,
                   unselectedColor:
-                      bottomNavTheme.unselectedItemColor ??
-                      colorScheme.onSurfaceVariant,
+                      bottomNavTheme.unselectedItemColor ?? colorScheme.onSurfaceVariant,
                   selectedLabelStyle: bottomNavTheme.selectedLabelStyle,
                   unselectedLabelStyle: bottomNavTheme.unselectedLabelStyle,
                 ),
@@ -177,9 +175,7 @@ class _BottomNavItem extends StatelessWidget {
               curve: Curves.easeOut,
               padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
-                color: isSelected
-                    ? color.withValues(alpha: 0.12)
-                    : Colors.transparent,
+                color: isSelected ? color.withValues(alpha: 0.12) : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, size: 24, color: color),
@@ -191,10 +187,7 @@ class _BottomNavItem extends StatelessWidget {
               AnimatedDefaultTextStyle(
                 duration: const Duration(milliseconds: 200),
                 curve: Curves.easeOut,
-                style: (labelStyle ?? const TextStyle()).copyWith(
-                  color: color,
-                  fontSize: 12,
-                ),
+                style: (labelStyle ?? const TextStyle()).copyWith(color: color, fontSize: 12),
                 child: Text(
                   label,
                   maxLines: 1,

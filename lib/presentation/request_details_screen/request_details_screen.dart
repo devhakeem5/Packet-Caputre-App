@@ -14,76 +14,10 @@ import './widgets/timing_tab_widget.dart';
 class RequestDetailsScreen extends StatelessWidget {
   RequestDetailsScreen({super.key});
 
-  final TrafficController trafficController = Get.find<TrafficController>();
+  final TrafficController trafficController = Get.put(TrafficController());
 
-  // Mock request data - in real app, this would come from arguments
-  final Map<String, dynamic> requestData = {
-    'requestId': 'req_1735272568067',
-    'url': 'https://api.example.com/v1/users/profile',
-    'method': 'GET',
-    'statusCode': 200,
-    'timestamp': DateTime.now().subtract(const Duration(minutes: 5)),
-    'packageName': 'com.example.netwatch',
-    'appName': 'NetWatch Pro',
-    'appVersion': '1.0.0',
-    'destinationIp': '192.168.1.100',
-    'port': 443,
-    'protocol': 'HTTPS',
-    'protocolVersion': 'HTTP/2',
-    'isEncrypted': true,
-    'connectionType': 'WiFi',
-    'bytesSent': 1024,
-    'bytesReceived': 4096,
-    'contentType': 'application/json',
-    'dnsLookupTime': 12.5,
-    'connectionTime': 45.3,
-    'sslHandshakeTime': 78.9,
-    'requestSentTime': 5.2,
-    'waitingTime': 123.4,
-    'downloadTime': 34.7,
-    'requestHeaders': {
-      'User-Agent': 'NetWatch/1.0.0 (Android 13)',
-      'Accept': 'application/json',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Connection': 'keep-alive',
-      'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-      'Content-Type': 'application/json',
-      'X-Request-ID': 'req_1735272568067',
-    },
-    'responseHeaders': {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Content-Length': '4096',
-      'Server': 'nginx/1.21.0',
-      'Date': 'Fri, 27 Dec 2024 03:54:28 GMT',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'X-Response-Time': '123ms',
-      'X-RateLimit-Limit': '1000',
-      'X-RateLimit-Remaining': '999',
-    },
-    'responseBody': '''
-{
-  "status": "success",
-  "data": {
-    "user": {
-      "id": "usr_12345",
-      "name": "John Doe",
-      "email": "john.doe@example.com",
-      "profile": {
-        "avatar": "https://example.com/avatars/john.jpg",
-        "bio": "Network monitoring enthusiast",
-        "location": "San Francisco, CA"
-      },
-      "settings": {
-        "notifications": true,
-        "theme": "dark",
-        "language": "en"
-      }
-    }
-  },
-  "timestamp": "2024-12-27T03:54:28Z"
-}
-''',
-  };
+  // Get arguments passed from navigation
+  final Map<String, dynamic> requestData = Get.arguments ?? {};
 
   @override
   Widget build(BuildContext context) {

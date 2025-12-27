@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:sizer/sizer.dart';
@@ -56,9 +58,7 @@ class AppListItemWidget extends StatelessWidget {
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.5.h),
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: theme.dividerColor, width: 1),
-            ),
+            border: Border(bottom: BorderSide(color: theme.dividerColor, width: 1)),
           ),
           child: Row(
             children: [
@@ -66,11 +66,12 @@ class AppListItemWidget extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: CustomImageWidget(
-                  imageUrl: app["icon"] as String,
+                  imageUrl: app["icon"] as String?,
+                  imageBytes: app["iconBytes"] as Uint8List?,
                   width: 48,
                   height: 48,
                   fit: BoxFit.cover,
-                  semanticLabel: app["semanticLabel"] as String,
+                  semanticLabel: app["semanticLabel"] as String?,
                 ),
               ),
 
@@ -103,17 +104,13 @@ class AppListItemWidget extends StatelessWidget {
                           CustomIconWidget(
                             iconName: 'access_time',
                             size: 12,
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.7),
+                            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                           ),
                           SizedBox(width: 1.w),
                           Text(
-                            _formatLastActivity(
-                              app["lastActivity"] as DateTime,
-                            ),
+                            _formatLastActivity(app["lastActivity"] as DateTime),
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant
-                                  .withValues(alpha: 0.7),
+                              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                               fontSize: 10,
                             ),
                           ),
@@ -121,15 +118,13 @@ class AppListItemWidget extends StatelessWidget {
                           CustomIconWidget(
                             iconName: 'data_usage',
                             size: 12,
-                            color: theme.colorScheme.onSurfaceVariant
-                                .withValues(alpha: 0.7),
+                            color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                           ),
                           SizedBox(width: 1.w),
                           Text(
                             app["dataUsage"] as String,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant
-                                  .withValues(alpha: 0.7),
+                              color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                               fontSize: 10,
                             ),
                           ),

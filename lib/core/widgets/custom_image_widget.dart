@@ -1,16 +1,19 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
+import 'dart:typed_data';
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
 import '../app_export.dart';
 
 extension ImageTypeExtension on String {
   ImageType get imageType {
-    if (this.startsWith('http') || this.startsWith('https')) {
+    if (startsWith('http') || startsWith('https')) {
       return ImageType.network;
-    } else if (this.endsWith('.svg')) {
+    } else if (endsWith('.svg')) {
       return ImageType.svg;
-    } else if (this.startsWith('file: //')) {
+    } else if (startsWith('file: //')) {
       return ImageType.file;
     } else {
       return ImageType.png;
@@ -22,8 +25,10 @@ enum ImageType { svg, png, network, file, unknown }
 
 // ignore_for_file: must_be_immutable
 class CustomImageWidget extends StatelessWidget {
-  CustomImageWidget({
+  const CustomImageWidget({
+    super.key,
     this.imageUrl,
+    this.imageBytes,
     this.height,
     this.width,
     this.color,
@@ -40,6 +45,7 @@ class CustomImageWidget extends StatelessWidget {
 
   ///[imageUrl] is required parameter for showing image
   final String? imageUrl;
+  final Uint8List? imageBytes;
 
   final double? height;
 
@@ -70,9 +76,7 @@ class CustomImageWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return alignment != null
-        ? Align(alignment: alignment!, child: _buildWidget())
-        : _buildWidget();
+    return alignment != null ? Align(alignment: alignment!, child: _buildWidget()) : _buildWidget();
   }
 
   Widget _buildWidget() {
@@ -83,19 +87,16 @@ class CustomImageWidget extends StatelessWidget {
   }
 
   ///build the image with border radius
-  _buildCircleImage() {
+  dynamic _buildCircleImage() {
     if (radius != null) {
-      return ClipRRect(
-        borderRadius: radius ?? BorderRadius.zero,
-        child: _buildImageWithBorder(),
-      );
+      return ClipRRect(borderRadius: radius ?? BorderRadius.zero, child: _buildImageWithBorder());
     } else {
       return _buildImageWithBorder();
     }
   }
 
   ///build the image with border and border radius style
-  _buildImageWithBorder() {
+  Widget _buildImageWithBorder() {
     if (border != null) {
       return Container(
         decoration: BoxDecoration(border: border, borderRadius: radius),
@@ -107,10 +108,24 @@ class CustomImageWidget extends StatelessWidget {
   }
 
   Widget _buildImageView() {
+    if (imageBytes != null) {
+      return Image.memory(
+        imageBytes!,
+        height: height,
+        width: width,
+        fit: fit ?? BoxFit.cover,
+        color: color,
+        semanticLabel: semanticLabel,
+        errorBuilder: (context, error, stackTrace) =>
+            errorWidget ??
+            Image.asset(placeHolder, height: height, width: width, fit: fit ?? BoxFit.cover),
+      );
+    }
+
     if (imageUrl != null) {
       switch (imageUrl!.imageType) {
         case ImageType.svg:
-          return Container(
+          return SizedBox(
             height: height,
             width: width,
             child: SvgPicture.asset(
@@ -118,11 +133,8 @@ class CustomImageWidget extends StatelessWidget {
               height: height,
               width: width,
               fit: fit ?? BoxFit.contain,
-              colorFilter: this.color != null
-                  ? ColorFilter.mode(
-                      this.color ?? Colors.transparent,
-                      BlendMode.srcIn,
-                    )
+              colorFilter: color != null
+                  ? ColorFilter.mode(color ?? Colors.transparent, BlendMode.srcIn)
                   : null,
               semanticsLabel: semanticLabel,
             ),
@@ -143,7 +155,7 @@ class CustomImageWidget extends StatelessWidget {
             fit: fit,
             imageUrl: imageUrl!,
             color: color,
-            placeholder: (context, url) => Container(
+            placeholder: (context, url) => SizedBox(
               height: 30,
               width: 30,
               child: LinearProgressIndicator(
