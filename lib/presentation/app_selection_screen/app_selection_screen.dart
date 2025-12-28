@@ -33,34 +33,46 @@ class AppSelectionScreen extends StatelessWidget {
   final RxBool isRefreshing = false.obs;
 
   AppSelectionScreen({super.key}) {
+    _loadSavedSelection();
     _fetchApps();
+  }
+
+  Future<void> _loadSavedSelection() async {
+    // Load saved selection from CaptureController
+    selectedApps.assignAll(captureController.selectedApps);
+    print("Loaded ${selectedApps.length} saved app selections");
   }
 
   Future<void> _fetchApps() async {
     isRefreshing.value = true;
     print("UI: specific fetchApps called");
-    final apps = await captureController.getInstalledApps();
-    print("UI: received ${apps.length} apps from controller");
-    // Transform to match UI expectations if needed
-    final formattedApps = apps.map((app) {
-      return {
-        "id": app["packageName"],
-        "name": app["name"],
-        "packageName": app["packageName"],
-        "iconBytes": app["iconBytes"], // New field
-        "icon": "", // Placeholder for compatibility
-        "semanticLabel": "${app["name"]} icon",
-        "isSystemApp": app["isSystemApp"] ?? false,
-        "lastActivity": DateTime.now(), // Placeholder
-        "dataUsage": "0 MB", // Placeholder
-        "requestCount": 0, // Placeholder
-      };
-    }).toList();
+    try {
+      final apps = await captureController.getInstalledApps();
+      print("UI: received ${apps.length} apps from controller");
+      // Transform to match UI expectations if needed
+      final formattedApps = apps.map((app) {
+        return {
+          "id": app["packageName"],
+          "name": app["name"],
+          "packageName": app["packageName"],
+          "iconBytes": app["iconBytes"], // New field
+          "icon": "", // Placeholder for compatibility
+          "semanticLabel": "${app["name"]} icon",
+          "isSystemApp": app["isSystemApp"] ?? false,
+          "lastActivity": DateTime.now(), // Placeholder
+          "dataUsage": "0 MB", // Placeholder
+          "requestCount": 0, // Placeholder
+        };
+      }).toList();
 
-    print("UI: formatted ${formattedApps.length} apps");
-    _installedApps.assignAll(formattedApps);
-    print("UI: _installedApps size is now ${_installedApps.length}");
-    isRefreshing.value = false;
+      print("UI: formatted ${formattedApps.length} apps");
+      _installedApps.assignAll(formattedApps);
+      print("UI: _installedApps size is now ${_installedApps.length}");
+    } catch (e) {
+      print("Error fetching apps: $e");
+    } finally {
+      isRefreshing.value = false;
+    }
   }
 
   // Filter apps based on search query
@@ -126,17 +138,13 @@ class AppSelectionScreen extends StatelessWidget {
 
   // Handle done button press
   void handleDone() {
+    // Save selection to persistent storage via CaptureController
+    captureController.updateSelectedApps(selectedApps);
+    
     // Update TrafficController filters
     final TrafficController trafficController = Get.find<TrafficController>();
     trafficController.selectedApps.assignAll(selectedApps);
     trafficController.applyFiltersAndSort();
-
-    // Update CaptureController as requested (using first selected as singular or null)
-    if (selectedApps.isNotEmpty) {
-      captureController.selectedPackageName.value = selectedApps.first;
-    } else {
-      captureController.selectedPackageName.value = null;
-    }
 
     // Save selection and navigate back
     Get.back();
@@ -236,11 +244,30 @@ class AppSelectionScreen extends StatelessWidget {
           // App list
           Expanded(
             child: Obx(
-              () => RefreshIndicator(
-                onRefresh: handleRefresh,
-                child: filteredApps.isEmpty
-                    ? _buildEmptyState(context)
-                    : ListView(
+              () {
+                if (isRefreshing.value && _installedApps.isEmpty) {
+                  // Show loading indicator while fetching apps
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 2.h),
+                        Text(
+                          'Loading apps...',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                return RefreshIndicator(
+                  onRefresh: handleRefresh,
+                  child: filteredApps.isEmpty
+                      ? _buildEmptyState(context)
+                      : ListView(
                         padding: EdgeInsets.symmetric(vertical: 1.h),
                         children: [
                           // System Apps Section
@@ -281,10 +308,11 @@ class AppSelectionScreen extends StatelessWidget {
                               ),
                           ],
 
-                          SizedBox(height: 2.h),
+                          SizedBox(height: 2.h                              ),
                         ],
                       ),
-              ),
+                    );
+              },
             ),
           ),
         ],

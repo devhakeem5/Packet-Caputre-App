@@ -68,6 +68,37 @@ class NetworkRequestItemWidget extends StatelessWidget {
     }
   }
 
+  Widget _buildAppIcon(Map<String, dynamic> request, ThemeData theme) {
+    final appIcon = request["appIcon"];
+    final semanticLabel = request["appIconSemanticLabel"] as String?;
+
+    // Check if appIcon is a valid non-empty string
+    final hasValidIcon =
+        appIcon is String &&
+        appIcon.isNotEmpty &&
+        appIcon != "null" &&
+        appIcon != "false" &&
+        appIcon != "true";
+
+    if (hasValidIcon) {
+      try {
+        return CustomImageWidget(
+          imageUrl: appIcon,
+          width: 40,
+          height: 40,
+          fit: BoxFit.cover,
+          semanticLabel: semanticLabel ?? 'App Icon',
+        );
+      } catch (e) {
+        // Fallback to icon if image loading fails
+        return Icon(Icons.apps_outlined, size: 40, color: theme.colorScheme.onSurfaceVariant);
+      }
+    }
+
+    // Default icon when no valid icon is available
+    return Icon(Icons.apps_outlined, size: 40, color: theme.colorScheme.onSurfaceVariant);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -116,19 +147,7 @@ class NetworkRequestItemWidget extends StatelessWidget {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child:
-                        (request["appIcon"] != null && request['appIcon'].isNotEmpty()) ||
-                            (request["appIconSemanticLabel"] != null &&
-                                (
-                                    request["appIconSemanticLabel"] != 'App Icon'))
-                        ? CustomImageWidget(
-                            imageUrl: request["appIcon"] as String,
-                            width: 40,
-                            height: 40,
-                            fit: BoxFit.cover,
-                            semanticLabel: request["appIconSemanticLabel"] as String? ?? '',
-                          )
-                        : Icon(Icons.apps_outlined),
+                    child: _buildAppIcon(request, theme),
                   ),
                   SizedBox(width: 3.w),
                   Expanded(

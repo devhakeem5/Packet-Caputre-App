@@ -36,19 +36,38 @@ class CapturedRequest {
         ? DateTime.fromMillisecondsSinceEpoch(json['timestamp'] as int)
         : DateTime.now();
 
+    final protocol = json['protocol'] as String? ?? "TCP";
+    final method = json['method'] as String? ?? protocol;
+    final direction = json['direction'] as String? ?? "outgoing";
+    final destIp = json['destIp'] as String? ?? "Unknown";
+    final srcIp = json['srcIp'] as String? ?? "Unknown";
+    final destPort = json['destPort'] as int? ?? 0;
+    final srcPort = json['srcPort'] as int? ?? 0;
+    
+    // Use payloadSize if available, otherwise fall back to size
+    final payloadSize = json['payloadSize'] as int? ?? json['size'] as int? ?? 0;
+    
+    // Construct URL based on direction
+    final url = direction == "incoming"
+        ? "${protocol.toLowerCase()}://$srcIp:$srcPort"
+        : "${protocol.toLowerCase()}://$destIp:$destPort";
+    
+    final domain = json['domain'] as String? ?? 
+        (direction == "incoming" ? srcIp : destIp);
+
     return CapturedRequest(
       id: UniqueKey().toString(),
-      url: "http://${json['destIp']}:${json['destPort']}", // Constructing URL from IP/Port
-      domain: json['domain'] as String? ?? json['destIp'] as String? ?? "Unknown",
-      method: "CONNECT", // Default for raw packets
-      protocol: json['protocol'] as String? ?? "TCP",
+      url: url,
+      domain: domain,
+      method: method,
+      protocol: protocol,
       statusCode: 200, // Placeholder as we don't inspect HTTP response codes in raw TCP
-      requestSize: json['size'] as int? ?? 0,
-      responseSize: 0,
+      requestSize: direction == "outgoing" ? payloadSize : 0,
+      responseSize: direction == "incoming" ? payloadSize : 0,
       responseTime: 0,
       timestamp: timestamp,
-      appName: json['appName'] as String?,
-      appPackage: json['package'] as String?,
+      appName: json['appName'] as String? ?? "Unknown App",
+      appPackage: json['package'] as String? ?? "unknown",
       headers: {},
     );
   }

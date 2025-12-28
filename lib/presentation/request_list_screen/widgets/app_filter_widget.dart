@@ -36,6 +36,44 @@ class AppFilterWidget extends StatelessWidget {
     return apps;
   }
 
+  Widget _buildAppIcon(Map<String, dynamic> app, ThemeData theme) {
+    final appIcon = app['appIcon'];
+    final semanticLabel = app['semanticLabel'] as String? ?? 'App Icon';
+    
+    // Check if appIcon is a valid non-empty string
+    final hasValidIcon = appIcon is String && 
+                        appIcon.isNotEmpty && 
+                        appIcon != "null" &&
+                        appIcon != "false" &&
+                        appIcon != "true";
+    
+    if (hasValidIcon) {
+      try {
+        return CustomImageWidget(
+          imageUrl: appIcon,
+          height: 10.w,
+          width: 10.w,
+          fit: BoxFit.cover,
+          semanticLabel: semanticLabel,
+        );
+      } catch (e) {
+        // Fallback to icon if image loading fails
+        return Icon(
+          Icons.apps_outlined,
+          size: 10.w,
+          color: theme.colorScheme.onSurfaceVariant,
+        );
+      }
+    }
+    
+    // Default icon when no valid icon is available
+    return Icon(
+      Icons.apps_outlined,
+      size: 10.w,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -139,13 +177,7 @@ class AppFilterWidget extends StatelessWidget {
               ),
               secondary: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: CustomImageWidget(
-                  imageUrl: app['appIcon'] as String,
-                  height: 10.w,
-                  width: 10.w,
-                  fit: BoxFit.cover,
-                  semanticLabel: app['semanticLabel'] as String,
-                ),
+                child: _buildAppIcon(app, Theme.of(context)),
               ),
               activeColor: theme.colorScheme.secondary,
               contentPadding: EdgeInsets.symmetric(

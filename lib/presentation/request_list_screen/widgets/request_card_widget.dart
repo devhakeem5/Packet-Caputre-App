@@ -56,6 +56,44 @@ class RequestCardWidget extends StatelessWidget {
     }
   }
 
+  Widget _buildAppIcon(Map<String, dynamic> request, ThemeData theme) {
+    final appIcon = request["appIcon"];
+    final semanticLabel = request["semanticLabel"] as String? ?? 'App Icon';
+    
+    // Check if appIcon is a valid non-empty string
+    final hasValidIcon = appIcon is String && 
+                        appIcon.isNotEmpty && 
+                        appIcon != "null" &&
+                        appIcon != "false" &&
+                        appIcon != "true";
+    
+    if (hasValidIcon) {
+      try {
+        return CustomImageWidget(
+          imageUrl: appIcon,
+          width: 40,
+          height: 40,
+          fit: BoxFit.cover,
+          semanticLabel: semanticLabel,
+        );
+      } catch (e) {
+        // Fallback to icon if image loading fails
+        return Icon(
+          Icons.apps_outlined,
+          size: 40,
+          color: theme.colorScheme.onSurfaceVariant,
+        );
+      }
+    }
+    
+    // Default icon when no valid icon is available
+    return Icon(
+      Icons.apps_outlined,
+      size: 40,
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -143,13 +181,7 @@ class RequestCardWidget extends StatelessWidget {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
-                      child: CustomImageWidget(
-                        imageUrl: request["appIcon"] as String,
-                        width: 40,
-                        height: 40,
-                        fit: BoxFit.cover,
-                        semanticLabel: request["semanticLabel"] as String,
-                      ),
+                      child: _buildAppIcon(request, theme),
                     ),
                     SizedBox(width: 3.w),
                     Expanded(

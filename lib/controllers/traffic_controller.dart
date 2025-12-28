@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/captured_request.dart';
 import '../core/widgets/custom_buttom_bar.dart';
+import 'capture_controller.dart';
 
 class TrafficController extends GetxController with GetTickerProviderStateMixin {
   // Requests data
@@ -43,6 +44,15 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
     requestListTabController = TabController(length: 4, vsync: this);
     tabController = TabController(length: 4, vsync: this);
 
+    // Load selected apps from CaptureController
+    try {
+      final captureController = Get.find<CaptureController>();
+      selectedApps.assignAll(captureController.selectedApps);
+      print("TrafficController: Loaded ${selectedApps.length} selected apps");
+    } catch (e) {
+      print("TrafficController: CaptureController not found, starting fresh");
+    }
+
     // Subscribe to native stream
     eventChannel.receiveBroadcastStream().listen(_onEvent, onError: _onError);
 
@@ -51,36 +61,58 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
   }
 
   void _onEvent(dynamic event) {
-    print(
-      "Flutter: Traffic event received: ${event.toString().substring(0, event.toString().length > 100 ? 100 : event.toString().length)}...",
-    ); // Log reception
-
+    print("═══════════════════════════════════════════════════════");
+    print("Flutter: Received traffic event from native");
+    print("Event type: ${event.runtimeType}");
+    if (event is Map) {
+      print("Event keys: ${event.keys.toList()}");
+    }
+    
     if (event is Map) {
       try {
         final request = CapturedRequest.fromJson(event);
-        print(
-          "Flutter: Parsed packet: ${request.protocol} ${request.method} -> ${request.url}",
-        ); // Log parsing
+        final direction = event['direction'] as String? ?? "outgoing";
+        final payloadSize = event['payloadSize'] as int? ?? event['size'] as int? ?? 0;
+        
+        print("Flutter: Parsed packet: ${request.protocol} ${request.method} -> ${request.url} (${direction}, ${payloadSize}B)");
+        print("App: ${request.appPackage ?? 'unknown'} (${request.appName ?? 'Unknown App'})");
 
-        // 1. Filter CONNECT / Tunnel events
-        if (request.method == "CONNECT") {
-          print("Flutter: Skipped CONNECT event (tunnel establishment)");
+        // 1. Filter based on selected apps (if any are selected)
+        // If apps are selected, only show traffic from those apps
+        // If no apps are selected, show all traffic (even without package name)
+        if (selectedApps.isNotEmpty) {
+          // If apps are selected, we need package name to filter
+          if (request.appPackage == null || request.appPackage!.isEmpty) {
+            print("Flutter: Skipped event: no app package (apps are selected)");
+            return;
+          }
+          if (!selectedApps.contains(request.appPackage)) {
+            print("Flutter: Skipped event: app ${request.appPackage} not in selected apps");
+            return;
+          }
+        } else {
+          // If no apps are selected, show all traffic including unknown apps
+          // But still prefer to have package name for better display
+          if (request.appPackage == null || request.appPackage!.isEmpty) {
+            // Use a default name for unknown apps
+            print("Flutter: Event without package name (showing as Unknown)");
+          }
+        }
+
+        // 2. Filter empty payload (Keep-alives/ACKs without data, tunnel-only events)
+        if (payloadSize <= 0) {
+          print("Flutter: Skipped event: empty payload (tunnel-only/handshake)");
           return;
         }
 
-        // 2. Filter events without App Package (Background/System/Unknown)
-        if (request.appPackage == null || request.appPackage!.isEmpty) {
-          print("Flutter: Skipped event (no app package/icon)");
+        // 3. Filter pure connection setup events (SYN-only, etc.)
+        // These are already filtered in native, but double-check
+        if (request.method == "CONNECT" && payloadSize == 0) {
+          print("Flutter: Skipped event: CONNECT tunnel establishment");
           return;
         }
 
-        // 3. Filter empty payload (Keep-alives/ACKs without data)
-        // Assuming requestSize is num
-        if (request.requestSize <= 0) {
-          print("Flutter: Skipped event (empty payload)");
-          return;
-        }
-
+        final totalSize = request.requestSize + request.responseSize;
         final requestMap = {
           "id": request.id,
           "appName": request.appName ?? "Unknown",
@@ -93,18 +125,24 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
           "protocol": request.protocol,
           "statusCode": request.statusCode,
           "timestamp": request.timestamp,
-          "requestSize": "${request.requestSize} B",
-          "responseSize": "0 B", // Streaming upload usually
+          "requestSize": request.requestSize > 0 ? "${request.requestSize} B" : "0 B",
+          "responseSize": request.responseSize > 0 ? "${request.responseSize} B" : "0 B",
           "responseTime": "${request.responseTime} ms",
           "headers": request.headers,
+          "direction": direction,
         };
 
         allRequests.insert(0, requestMap);
-        print("Flutter: Traffic list size updated: ${allRequests.length}"); // Log update
+        print("✓ Flutter: Displayed traffic event for ${request.appPackage} (${request.protocol} ${request.method}, ${totalSize}B)");
+        print("Total requests: ${allRequests.length}");
+        print("═══════════════════════════════════════════════════════");
         applyFiltersAndSort();
-      } catch (e) {
-        print("Error parsing event: $e");
+      } catch (e, stackTrace) {
+        print("Flutter: Error parsing event: $e");
+        print("Flutter: Stack trace: $stackTrace");
       }
+    } else {
+      print("Flutter: Received non-map event: ${event.runtimeType}");
     }
   }
 
