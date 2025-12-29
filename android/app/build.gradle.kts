@@ -42,3 +42,8 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    implementation("org.bouncycastle:bcpkix-jdk15to18:1.76")
+    implementation("org.bouncycastle:bcprov-jdk15to18:1.76")
+}

@@ -43,6 +43,11 @@ dependencies:
   shared_preferences: ^2.5.4
   connectivity_plus: ^7.0.0
   get: ^4.6.6
+  path_provider: ^2.1.5
+  flutter_secure_storage: ^10.0.0
+  android_intent_plus: ^6.0.0
+
+
 
 dev_dependencies:
   flutter_test:

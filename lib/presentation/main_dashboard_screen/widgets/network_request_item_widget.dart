@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../../core/app_export.dart';
+import '../../../core/widgets/app_icon_widget.dart';
 
 class NetworkRequestItemWidget extends StatelessWidget {
   final Map<String, dynamic> request;
@@ -69,34 +70,7 @@ class NetworkRequestItemWidget extends StatelessWidget {
   }
 
   Widget _buildAppIcon(Map<String, dynamic> request, ThemeData theme) {
-    final appIcon = request["appIcon"];
-    final semanticLabel = request["appIconSemanticLabel"] as String?;
-
-    // Check if appIcon is a valid non-empty string
-    final hasValidIcon =
-        appIcon is String &&
-        appIcon.isNotEmpty &&
-        appIcon != "null" &&
-        appIcon != "false" &&
-        appIcon != "true";
-
-    if (hasValidIcon) {
-      try {
-        return CustomImageWidget(
-          imageUrl: appIcon,
-          width: 40,
-          height: 40,
-          fit: BoxFit.cover,
-          semanticLabel: semanticLabel ?? 'App Icon',
-        );
-      } catch (e) {
-        // Fallback to icon if image loading fails
-        return Icon(Icons.apps_outlined, size: 40, color: theme.colorScheme.onSurfaceVariant);
-      }
-    }
-
-    // Default icon when no valid icon is available
-    return Icon(Icons.apps_outlined, size: 40, color: theme.colorScheme.onSurfaceVariant);
+    return AppIconWidget(packageName: request["appPackage"] as String?, size: 40);
   }
 
   @override

@@ -32,6 +32,15 @@ class VpnService : VpnService() {
     // Key: SourceIP:SourcePort:DestIP:DestPort
     private val udpTable = ConcurrentHashMap<String, DatagramChannel>()
     private val tcpTable = ConcurrentHashMap<String, TcpSession>()
+    
+    // DNS and Connection tracking
+    private val dnsCache = ConcurrentHashMap<String, String>() // IP -> Domain
+    private val connectionData = ConcurrentHashMap<String, ConnectionTracker>() // Connection key -> Tracker
+
+    // Proxy Server
+    private var proxyServer: HttpProxyServer? = null
+    private val PROXY_PORT = 8080
+
 
     private class TcpSession(
         val channel: SocketChannel,
@@ -40,6 +49,20 @@ class VpnService : VpnService() {
         var clientAck: Long,
         var serverSeq: Long,
         var serverAck: Long
+    )
+    
+    private class ConnectionTracker(
+        val connectionKey: String,
+        val startTime: Long,
+        var totalBytesSent: Int = 0,
+        var totalBytesReceived: Int = 0,
+        var serverName: String? = null, // SNI from TLS
+        var httpHost: String? = null, // Host from HTTP
+        var httpPath: String? = null,
+        var httpMethod: String? = null,
+        val requestHeaders: MutableMap<String, String> = mutableMapOf(),
+        var lastActivityTime: Long = System.currentTimeMillis(),
+        var eventSent: Boolean = false // To avoid duplicate events
     )
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -80,6 +103,10 @@ class VpnService : VpnService() {
 
             startTrafficLoop()
             
+            // Start Local HTTP Proxy
+            proxyServer = HttpProxyServer(PROXY_PORT)
+            proxyServer?.start(applicationContext)
+
             Log.d(TAG, "VPN Started - Monitoring all traffic")
         } catch (e: Exception) {
             Log.e(TAG, "Error starting VPN", e)
@@ -97,6 +124,8 @@ class VpnService : VpnService() {
             udpTable.clear()
             tcpTable.values.forEach { try { it.channel.close() } catch (e: Exception) {} }
             tcpTable.clear()
+            proxyServer?.stop()
+            proxyServer = null
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping VPN", e)
         }
@@ -229,6 +258,13 @@ class VpnService : VpnService() {
             return
         }
         
+        // Block UDP 443/80 to force QUIC fallback to TCP (HTTP/1.1 or HTTP/2)
+        // This ensures traffic goes through the Proxy and is decrypted/captured.
+        if (destPort == 443 || destPort == 80) {
+             // Log.d(TAG, "Blocking UDP traffic on port $destPort to force TCP/HTTP fallback (QUIC blocking)")
+             return
+        }
+
         meta["srcPort"] = srcPort
         meta["destPort"] = destPort
         meta["method"] = "UDP"
@@ -286,8 +322,8 @@ class VpnService : VpnService() {
 
     private fun handleUdpRead(key: SelectionKey) {
         val channel = key.channel() as DatagramChannel
-        // CRITICAL FIX: Reduce buffer to fit in MTU
-        val buffer = ByteBuffer.allocate(1024)
+        // CRITICAL FIX: Increased buffer to fit in larger MTU/packets (QUIC/DNS/etc)
+        val buffer = ByteBuffer.allocate(32767)
         try {
             val bytesRead = channel.read(buffer)
             if (bytesRead > 0) {
@@ -355,22 +391,22 @@ class VpnService : VpnService() {
             else -> "TCP"
         }
         
-        meta["srcPort"] = srcPort
-        meta["destPort"] = destPort
-        meta["method"] = protocol
-        meta["url"] = "$destIp:$destPort"
-        meta["domain"] = destIp
-        meta["direction"] = "outgoing"
-        meta["payloadSize"] = payloadLen
-        fillAppInfo(srcPort, "tcp", meta)
-
         val key = "$srcIp:$srcPort:$destIp:$destPort"
         var session = tcpTable[key]
+        
+        // Get or create connection tracker
+        var tracker = connectionData[key]
+        if (tracker == null && payloadLen > 0) {
+            tracker = ConnectionTracker(
+                connectionKey = key,
+                startTime = System.currentTimeMillis()
+            )
+            connectionData[key] = tracker
+        }
 
         try {
             if (isSyn) {
-                // SYN packet - connection setup, no data yet
-                // Only create session, don't emit event (no payload)
+                // SYN packet - connection setup
                 if (session == null) {
                     Log.d(TAG, "Creating new TCP session: $key")
                     val channel = SocketChannel.open()
@@ -384,7 +420,29 @@ class VpnService : VpnService() {
                         return
                     }
 
-                    channel.connect(InetSocketAddress(destIp, destPort))
+                    if (destPort == 80 || destPort == 443) {
+                        Log.d(TAG, "Routing Traffic (Port $destPort) to Local Proxy (Port $PROXY_PORT)")
+                        channel.connect(InetSocketAddress("127.0.0.1", PROXY_PORT))
+                        
+                        // Register session metadata
+                        // We need to wait for connect to finish? 
+                        // Actually, local port is assigned on connect. 
+                        // But since it's non-blocking, connect() might return false.
+                        // However, the local port IS assigned.
+                        val localPort = channel.socket().localPort
+                        if (localPort != -1) {
+                            val appMeta = mutableMapOf<String, String>()
+                            tracker?.let {
+                                appMeta["package"] = meta["package"] as? String ?: ""
+                                appMeta["appName"] = meta["appName"] as? String ?: ""
+                                appMeta["uid"] = meta["uid"].toString()
+                            }
+                            HttpProxyServer.registerSession(localPort, appMeta)
+                            Log.d(TAG, "Registered Proxy Session: LocalPort $localPort -> ${appMeta["package"]}")
+                        }
+                    } else {
+                        channel.connect(InetSocketAddress(destIp, destPort))
+                    }
                     channel.register(selector, SelectionKey.OP_CONNECT, key)
                     
                     session = TcpSession(channel, key, seq + 1, 0, 0, 0)
@@ -392,61 +450,105 @@ class VpnService : VpnService() {
                     Log.d(TAG, "TCP session created: $key, total: ${tcpTable.size}")
                 }
             } else {
-                // Handle data packets (PSH, ACK with data, etc.)
-                if (session == null) {
-                    // Session not found - might be a response or late packet
-                    // Try to create session or find existing one
-                    Log.d(TAG, "TCP packet without session: $key, flags: SYN=$isSyn PSH=$isPsh ACK=$isAck FIN=$isFin")
+                // Handle data packets
+                if (session == null && payloadLen > 0 && !isSyn) {
+                    // Late packet with data, create session
+                    val channel = SocketChannel.open()
+                    channel.configureBlocking(false)
+                    val protected = protect(channel.socket())
                     
-                    // For data packets without session, try to create one
-                    if (payloadLen > 0 && !isSyn) {
-                        val channel = SocketChannel.open()
-                        channel.configureBlocking(false)
-                        val protected = protect(channel.socket())
-                        Log.d(TAG, "TCP Protect Result (Late): $protected")
-                        
-                        if (!protected) {
-                            Log.e(TAG, "Failed to protect TCP socket (Late) - Closing")
-                            channel.close()
-                            return // Or continue without session, but usually bad.
-                        }
-
-                        channel.connect(InetSocketAddress(destIp, destPort))
-                        channel.register(selector, SelectionKey.OP_CONNECT, key)
-                        
-                        session = TcpSession(channel, key, seq, 0, 0, 0)
-                        tcpTable[key] = session
-                        Log.d(TAG, "Created late TCP session: $key")
+                    if (!protected) {
+                        Log.e(TAG, "Failed to protect TCP socket (Late) - Closing")
+                        channel.close()
+                        return
                     }
+
+                    if (destPort == 80 || destPort == 443) {
+                        channel.connect(InetSocketAddress("127.0.0.1", PROXY_PORT))
+                         val localPort = channel.socket().localPort
+                        if (localPort != -1) {
+                            val appMeta = mutableMapOf<String, String>()
+                             // tracker might be null here if new session? No, we created tracker above 
+                             // Wait, tracker is created at line 380ish.
+                             // But we need to make sure we populate it.
+                            val pkg = meta["package"] as? String
+                            if (pkg != null) {
+                                appMeta["package"] = pkg
+                                appMeta["appName"] = meta["appName"] as? String ?: ""
+                                appMeta["uid"] = meta["uid"].toString()
+                                HttpProxyServer.registerSession(localPort, appMeta)
+                            }
+                        }
+                    } else {
+                        channel.connect(InetSocketAddress(destIp, destPort))
+                    }
+                    channel.register(selector, SelectionKey.OP_CONNECT, key)
+                    
+                    session = TcpSession(channel, key, seq, 0, 0, 0)
+                    tcpTable[key] = session
                 }
                 
-                if (session != null) {
-                    // DATA Transfer - emit if there's actual payload
-                    if (payloadLen > 0) {
-                        buffer.position(ipHeaderLen + tcpHeaderLen)
+                if (session != null && payloadLen > 0) {
+                    // Update tracker
+                    tracker?.totalBytesSent = (tracker?.totalBytesSent ?: 0) + payloadLen
+                    tracker?.lastActivityTime = System.currentTimeMillis()
+                    
+                    // Extract payload for analysis
+                    val payloadStart = ipHeaderLen + tcpHeaderLen
+                    val payload = ByteArray(payloadLen)
+                    System.arraycopy(data, payloadStart, payload, 0, payloadLen)
+                    
+                    // Try to extract information from payload
+                    if (destPort == 443 || srcPort == 443) {
+                        // Try to extract SNI from TLS ClientHello
+                        extractSNI(payload, tracker)
+                    } else if (destPort == 80 || srcPort == 80) {
+                        // Try to parse HTTP
+                        parseHttpRequest(payload, tracker)
+                    }
+                    
+                    // Forward data ONLY if channel is connected
+                    if (session.channel.isConnected) {
+                        buffer.position(payloadStart)
                         val bytesWritten = session.channel.write(buffer)
                         session.clientSeq += payloadLen
-                        
-                        Log.d(TAG, "TCP data: port=$srcPort->$destPort, payload=$payloadLen bytes, written=$bytesWritten")
-                        
-                        // Emit event - Flutter will filter based on selected apps
-                        TrafficHandler.sendPacket(meta)
-                        Log.d(TAG, "✓ Sent TCP packet event: port=$srcPort, payload=$payloadLen, package=${meta["package"] ?: "unknown"}")
-                        
-                        // ACK this data
-                        sendTcpPacket(session, destIp, srcIp, destPort, srcPort, 0x10, null) // ACK
-                    } else if (isFin) {
-                        Log.d(TAG, "TCP FIN received, closing session: $key")
-                        session.channel.close()
-                        tcpTable.remove(key)
-                    } else if (isAck && !isPsh) {
-                        // Pure ACK without data - just forward, don't emit
-                        Log.d(TAG, "TCP pure ACK (no data): $key")
+                    } else {
+                        // Queue data for later or wait for connection
+                        Log.d(TAG, "Channel not yet connected, skipping write for $key")
                     }
+                    
+                    // Send event only once per connection (when we have meaningful data)
+                    // Send event only once per connection (when we have meaningful data)
+                    // For Port 80 (HTTP) and 443 (HTTPS), the Proxy emits the event, so we skip it here to avoid duplication/noise
+                    if (tracker != null && !tracker.eventSent && shouldSendEvent(tracker) && destPort != 80 && srcPort != 80 && destPort != 443 && srcPort != 443) {
+                        sendAggregatedEvent(key, tracker, srcIp, destIp, srcPort, destPort, protocol, meta)
+                        tracker.eventSent = true
+                    }
+                    
+                    // ACK this data
+                    sendTcpPacket(session, destIp, srcIp, destPort, srcPort, 0x10, null)
+                } else if (isFin) {
+                    Log.d(TAG, "TCP FIN received, closing session: $key")
+                    session?.channel?.close()
+                    tcpTable.remove(key)
+                    // Clean up tracker after some delay or send final event if not sent
+                    tracker?.let {
+                        if (!it.eventSent && it.totalBytesSent > 0) {
+                            sendAggregatedEvent(key, it, srcIp, destIp, srcPort, destPort, protocol, meta)
+                        }
+                    }
+                    connectionData.remove(key)
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "TCP Error for $key", e)
+             // Check if we need to clean up proxy session
+             // access session?.channel?.socket()?.localPort
+             try {
+                session?.channel?.socket()?.localPort?.let { 
+                    HttpProxyServer.unregisterSession(it) 
+                }
+             } catch(ex: Exception) {}
             tcpTable.remove(key)
         }
     }
@@ -496,6 +598,15 @@ class VpnService : VpnService() {
                 sendTcpPacket(session, parts[2], parts[0], parts[3].toInt(), parts[1].toInt(), 0x11, null) // FIN+ACK
                 channel.close()
                 tcpTable.remove(keyStr)
+                
+                // Clean up connection tracker
+                connectionData.remove(keyStr)
+                
+                // Unregister Proxy Session
+                try {
+                     HttpProxyServer.unregisterSession(channel.socket().localPort)
+                } catch(e: Exception) {}
+                
                 return
             }
             if (bytesRead > 0) {
@@ -506,6 +617,11 @@ class VpnService : VpnService() {
                 val srcPort = parts[3].toInt()
                 val destPort = parts[1].toInt()
                 
+                // Update connection tracker with received bytes
+                val tracker = connectionData[keyStr]
+                tracker?.totalBytesReceived = (tracker?.totalBytesReceived ?: 0) + bytesRead
+                tracker?.lastActivityTime = System.currentTimeMillis()
+                
                 // Determine protocol based on port
                 val protocol = when {
                     srcPort == 80 || destPort == 80 -> "HTTP"
@@ -513,28 +629,9 @@ class VpnService : VpnService() {
                     else -> "TCP"
                 }
                 
+                // Don't send separate incoming events - they're handled by aggregated events
+                // Just forward the data back to the app
                 Log.d(TAG, "TCP response: $srcPort->$destPort, bytes=$bytesRead, protocol=$protocol")
-                
-                // Emit incoming response event
-                val meta = mutableMapOf<String, Any>(
-                    "timestamp" to System.currentTimeMillis(),
-                    "protocol" to protocol,
-                    "srcIp" to srcIp,
-                    "destIp" to destIp,
-                    "srcPort" to srcPort,
-                    "destPort" to destPort,
-                    "method" to protocol,
-                    "url" to "$srcIp:$srcPort",
-                    "domain" to srcIp,
-                    "direction" to "incoming",
-                    "payloadSize" to bytesRead,
-                    "size" to bytesRead
-                )
-                fillAppInfo(destPort, "tcp", meta)
-                
-                // Emit event - always send, Flutter will filter
-                TrafficHandler.sendPacket(meta)
-                Log.d(TAG, "✓ Sent TCP response event: port=$destPort, bytes=$bytesRead, package=${meta["package"] ?: "unknown"}")
                 
                 // PSH+ACK (0x08 + 0x10 = 0x18)
                 sendTcpPacket(session, srcIp, destIp, srcPort, destPort, 0x18, buffer)
@@ -542,6 +639,7 @@ class VpnService : VpnService() {
         } catch (e: Exception) {
             Log.e(TAG, "TCP Read Error", e)
             tcpTable.remove(keyStr)
+            connectionData.remove(keyStr)
         }
     }
 
@@ -748,6 +846,13 @@ class VpnService : VpnService() {
             getNameForUid(uid)?.let { 
                 meta["package"] = it 
                 meta["appName"] = getAppName(it)
+                meta["isSystemApp"] = isSystemApp(it)
+                
+                // Add app icon as base64 string
+                getAppIconBase64(it)?.let { iconBase64 ->
+                    meta["appIcon"] = iconBase64
+                }
+                
                 Log.d(TAG, "Found app: $it for port $port")
             } ?: run {
                 Log.d(TAG, "UID $uid found but no package name")
@@ -756,6 +861,10 @@ class VpnService : VpnService() {
             // Even if we can't identify the app, we'll still send the event
             // Flutter will filter it if needed
             Log.d(TAG, "Could not identify app for port $port (protocol: $protocol)")
+            // Mark as likely system if UID < 10000 or unknown
+             if (uid != null && uid < 10000) {
+                 meta["isSystemApp"] = true
+             }
         }
     }
     
@@ -874,6 +983,237 @@ class VpnService : VpnService() {
             packageManager.getApplicationLabel(info).toString()
         } catch (e: Exception) {
             packageName
+        }
+    }
+    
+    private fun getAppIconBase64(packageName: String): String? {
+        return try {
+            val info = packageManager.getApplicationInfo(packageName, 0)
+            val icon = packageManager.getApplicationIcon(info)
+            
+            // Convert drawable to bitmap then to base64
+            val bitmap = android.graphics.Bitmap.createBitmap(
+                icon.intrinsicWidth,
+                icon.intrinsicHeight,
+                android.graphics.Bitmap.Config.ARGB_8888
+            )
+            val canvas = android.graphics.Canvas(bitmap)
+            icon.setBounds(0, 0, canvas.width, canvas.height)
+            icon.draw(canvas)
+            
+            val outputStream = java.io.ByteArrayOutputStream()
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, outputStream)
+            val byteArray = outputStream.toByteArray()
+            
+            "data:image/png;base64," + android.util.Base64.encodeToString(byteArray, android.util.Base64.NO_WRAP)
+        } catch (e: Exception) {
+            null
+        }
+    }
+      private fun isSystemApp(packageName: String): Boolean {
+        return try {
+            val info = packageManager.getApplicationInfo(packageName, 0)
+            (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+        } catch (e: Exception) {
+            false
+        }
+    }
+    
+    // --- Helper Functions for Enhanced Parsing ---
+    
+    private fun extractSNI(payload: ByteArray, tracker: ConnectionTracker?) {
+        try {
+            if (payload.size < 43) return // Too small for TLS ClientHello
+            
+            // Check if it's a TLS Handshake (0x16) and ClientHello (0x01)
+            if (payload[0] != 0x16.toByte()) return
+            if (payload.size < 6) return
+            
+            val contentType = payload[0].toInt() and 0xFF
+            val handshakeType = payload[5].toInt() and 0xFF
+            
+            if (contentType != 0x16 || handshakeType != 0x01) return
+            
+            // Parse TLS ClientHello to find SNI
+            var pos = 43 // Skip fixed headers
+            
+            // Skip session ID
+            if (pos >= payload.size) return
+            val sessionIdLen = payload[pos].toInt() and 0xFF
+            pos += 1 + sessionIdLen
+            
+            // Skip cipher suites
+            if (pos + 2 >= payload.size) return
+            val cipherSuitesLen = ((payload[pos].toInt() and 0xFF) shl 8) or (payload[pos + 1].toInt() and 0xFF)
+            pos += 2 + cipherSuitesLen
+            
+            // Skip compression methods
+            if (pos >= payload.size) return
+            val compressionLen = payload[pos].toInt() and 0xFF
+            pos += 1 + compressionLen
+            
+            // Extensions
+            if (pos + 2 >= payload.size) return
+            val extensionsLen = ((payload[pos].toInt() and 0xFF) shl 8) or (payload[pos + 1].toInt() and 0xFF)
+            pos += 2
+            
+            val extensionsEnd = pos + extensionsLen
+            while (pos + 4 <= extensionsEnd && pos + 4 < payload.size) {
+                val extType = ((payload[pos].toInt() and 0xFF) shl 8) or (payload[pos + 1].toInt() and 0xFF)
+                val extLen = ((payload[pos + 2].toInt() and 0xFF) shl 8) or (payload[pos + 3].toInt() and 0xFF)
+                pos += 4
+                
+                if (extType == 0x0000) { // SNI extension
+                    if (pos + 5 <= payload.size) {
+                        val listLen = ((payload[pos].toInt() and 0xFF) shl 8) or (payload[pos + 1].toInt() and 0xFF)
+                        val nameType = payload[pos + 2].toInt() and 0xFF
+                        val nameLen = ((payload[pos + 3].toInt() and 0xFF) shl 8) or (payload[pos + 4].toInt() and 0xFF)
+                        
+                        if (nameType == 0 && pos + 5 + nameLen <= payload.size) {
+                            val serverName = String(payload, pos + 5, nameLen, Charsets.UTF_8)
+                            tracker?.serverName = serverName
+                            Log.d(TAG, "Extracted SNI: $serverName")
+                            return
+                        }
+                    }
+                }
+                pos += extLen
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error extracting SNI: ${e.message}")
+        }
+    }
+    
+    private fun parseHttpRequest(payload: ByteArray, tracker: ConnectionTracker?) {
+        try {
+            val request = String(payload, Charsets.UTF_8)
+            val lines = request.split("\r\n")
+            
+            if (lines.isEmpty()) return
+            
+            // Parse request line (GET /path HTTP/1.1)
+            val requestLine = lines[0]
+            val parts = requestLine.split(" ")
+            if (parts.size >= 2) {
+                tracker?.httpMethod = parts[0]
+                tracker?.httpPath = parts[1]
+                Log.d(TAG, "HTTP: ${parts[0]} ${parts[1]}")
+            }
+            
+            // Parse headers
+            for (i in 1 until lines.size) {
+                val line = lines[i]
+                if (line.isEmpty()) break // End of headers
+                
+                val colonIndex = line.indexOf(":")
+                if (colonIndex > 0) {
+                    val key = line.substring(0, colonIndex).trim()
+                    val value = line.substring(colonIndex + 1).trim()
+                    
+                    if (key.equals("Host", ignoreCase = true)) {
+                        tracker?.httpHost = value
+                        Log.d(TAG, "HTTP Host: $value")
+                    }
+                    
+                    tracker?.requestHeaders?.put(key, value)
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error parsing HTTP: ${e.message}")
+        }
+    }
+    
+    private fun shouldSendEvent(tracker: ConnectionTracker): Boolean {
+        // Send event more aggressively to ensure traffic is captured
+        // Even small amounts of data should trigger event for better user experience
+        return tracker.totalBytesSent > 0 || // Any payload
+               tracker.serverName != null || // SNI extracted
+               tracker.httpHost != null // HTTP Host found
+    }
+    
+    private fun sendAggregatedEvent(
+        key: String, 
+        tracker: ConnectionTracker,
+        srcIp: String,
+        destIp: String, 
+        srcPort: Int,
+        destPort: Int,
+        protocol: String,
+        baseMeta: MutableMap<String, Any>
+    ) {
+        val meta = mutableMapOf<String, Any>(
+            "timestamp" to tracker.startTime,
+            "protocol" to protocol,
+            "srcIp" to srcIp,
+            "destIp" to destIp,
+            "srcPort" to srcPort,
+            "destPort" to destPort,
+            "method" to (tracker.httpMethod ?: protocol),
+            "direction" to "outgoing",
+            "payloadSize" to tracker.totalBytesSent,
+            "size" to tracker.totalBytesSent
+        )
+        
+        // Build better URL and domain
+        val domain = tracker.serverName ?: tracker.httpHost ?: dnsCache[destIp] ?: destIp
+        val path = tracker.httpPath ?: ""
+        
+        val url = when {
+            tracker.httpHost != null -> "http://${tracker.httpHost}$path"
+            tracker.serverName != null -> "https://${tracker.serverName}$path"
+            dnsCache.containsKey(destIp) -> "${protocol.lowercase()}://${dnsCache[destIp]}:$destPort"
+            else -> "${protocol.lowercase()}://$destIp:$destPort"
+        }
+        
+        meta["url"] = url
+        meta["domain"] = domain
+        
+        // Add headers if available
+        if (tracker.requestHeaders.isNotEmpty()) {
+            meta["requestHeaders"] = tracker.requestHeaders.toMap()
+        }
+        
+        // Fill app info
+        fillAppInfo(srcPort, "tcp", meta)
+        
+        TrafficHandler.sendPacket(meta)
+        Log.d(TAG, "✓ Sent aggregated event: $url (${tracker.totalBytesSent}B)")
+    }
+    
+    private fun handleDnsResponse(payload: ByteArray, srcIp: String) {
+        try {
+            // Simple DNS response parser 
+            if (payload.size < 12) return
+            
+            val flags = ((payload[2].toInt() and 0xFF) shl 8) or (payload[3].toInt() and 0xFF)
+            val isResponse = (flags and 0x8000) != 0
+            
+            if (!isResponse) return
+            
+            val answerCount = ((payload[6].toInt() and 0xFF) shl 8) or (payload[7].toInt() and 0xFF)
+            if (answerCount == 0) return
+            
+            // Parse domain name and IP from DNS response
+            // This is a simplified parser - full DNS parsing is complex
+            var pos = 12
+            
+            // Skip question section
+            while (pos < payload.size) {
+                val len = payload[pos].toInt() and 0xFF
+                if (len == 0) {
+                    pos += 5 // Skip null terminator + QTYPE + QCLASS
+                    break
+                }
+                pos += len + 1
+            }
+            
+            // Parse answer section (simplified - only A records)
+            if (pos + 14 <= payload.size) {
+                // We could parse the full answer, but for now just log
+                Log.d(TAG, "DNS response received, caching IP mappings")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error parsing DNS: ${e.message}")
         }
     }
 }

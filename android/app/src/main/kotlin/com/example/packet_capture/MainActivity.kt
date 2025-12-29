@@ -86,6 +86,40 @@ class MainActivity : FlutterActivity() {
                     android.util.Log.d("PacketCapture", "Filtered app list size: ${appList.size}")
                     result.success(appList)
                 }
+                "getAppIcon" -> {
+                    val packageName = call.argument<String>("packageName")
+                    if (packageName == null) {
+                        result.success(null)
+                        return@setMethodCallHandler
+                    }
+                    
+                    try {
+                        val pm = packageManager
+                        val appInfo = pm.getApplicationInfo(packageName, 0)
+                        val drawable = appInfo.loadIcon(pm)
+                        
+                        val bitmap = if (drawable is android.graphics.drawable.BitmapDrawable) {
+                            drawable.bitmap
+                        } else {
+                            val bmp = android.graphics.Bitmap.createBitmap(
+                                drawable.intrinsicWidth, 
+                                drawable.intrinsicHeight, 
+                                android.graphics.Bitmap.Config.ARGB_8888
+                            )
+                            val canvas = android.graphics.Canvas(bmp)
+                            drawable.setBounds(0, 0, canvas.width, canvas.height)
+                            drawable.draw(canvas)
+                            bmp
+                        }
+                        
+                        val stream = java.io.ByteArrayOutputStream()
+                        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, stream)
+                        result.success(stream.toByteArray())
+                    } catch (e: Exception) {
+                        android.util.Log.e("PacketCapture", "Error loading icon for $packageName", e)
+                        result.success(null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }

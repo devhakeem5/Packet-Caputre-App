@@ -28,7 +28,7 @@ class MainDashboardScreen extends StatelessWidget {
         Get.toNamed('/request-list-screen');
         break;
       case 3:
-        Get.toNamed('/request-details-screen');
+        Get.toNamed('/settings-screen');
         break;
     }
   }

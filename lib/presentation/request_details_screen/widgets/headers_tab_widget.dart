@@ -1,4 +1,4 @@
-  import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../../core/app_export.dart';
@@ -21,10 +21,17 @@ class _HeadersTabWidgetState extends State<HeadersTabWidget> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final requestHeaders =
-        widget.requestData['requestHeaders'] as Map<String, dynamic>? ?? {};
-    final responseHeaders =
-        widget.requestData['responseHeaders'] as Map<String, dynamic>? ?? {};
+
+    // Safely convert headers from Map<dynamic, dynamic> to Map<String, dynamic>
+    final requestHeadersRaw = widget.requestData['requestHeaders'];
+    final responseHeadersRaw = widget.requestData['responseHeaders'];
+
+    final requestHeaders = requestHeadersRaw != null
+        ? Map<String, dynamic>.from(requestHeadersRaw as Map)
+        : <String, dynamic>{};
+    final responseHeaders = responseHeadersRaw != null
+        ? Map<String, dynamic>.from(responseHeadersRaw as Map)
+        : <String, dynamic>{};
 
     final filteredRequestHeaders = _filterHeaders(requestHeaders);
     final filteredResponseHeaders = _filterHeaders(responseHeaders);
@@ -66,10 +73,7 @@ class _HeadersTabWidgetState extends State<HeadersTabWidget> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: Border(
-          bottom: BorderSide(
-            color: theme.colorScheme.outline.withValues(alpha: 0.2),
-            width: 1,
-          ),
+          bottom: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2), width: 1),
         ),
       ),
       child: TextField(
@@ -93,27 +97,17 @@ class _HeadersTabWidgetState extends State<HeadersTabWidget> {
               : null,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(
-              color: theme.colorScheme.outline.withValues(alpha: 0.5),
-            ),
+            borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.5)),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(
-              color: theme.colorScheme.outline.withValues(alpha: 0.5),
-            ),
+            borderSide: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.5)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(
-              color: theme.colorScheme.secondary,
-              width: 2,
-            ),
+            borderSide: BorderSide(color: theme.colorScheme.secondary, width: 2),
           ),
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: 4.w,
-            vertical: 1.5.h,
-          ),
+          contentPadding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.5.h),
           filled: true,
           fillColor: theme.colorScheme.surface,
         ),
@@ -135,10 +129,7 @@ class _HeadersTabWidgetState extends State<HeadersTabWidget> {
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: 0.5),
-          width: 1,
-        ),
+        border: Border.all(color: theme.colorScheme.outline.withValues(alpha: 0.5), width: 1),
       ),
       child: Column(
         children: [
@@ -169,10 +160,7 @@ class _HeadersTabWidgetState extends State<HeadersTabWidget> {
                     ),
                   ),
                   Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 2.w,
-                      vertical: 0.5.h,
-                    ),
+                    padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.secondaryContainer,
                       borderRadius: BorderRadius.circular(12),
@@ -209,11 +197,7 @@ class _HeadersTabWidgetState extends State<HeadersTabWidget> {
               )
             else
               ...headers.entries.map((entry) {
-                return _buildHeaderItem(
-                  context,
-                  entry.key,
-                  entry.value.toString(),
-                );
+                return _buildHeaderItem(context, entry.key, entry.value.toString());
               }),
           ],
         ],
@@ -234,10 +218,7 @@ class _HeadersTabWidgetState extends State<HeadersTabWidget> {
             ? theme.colorScheme.secondaryContainer.withValues(alpha: 0.3)
             : Colors.transparent,
         border: Border(
-          top: BorderSide(
-            color: theme.colorScheme.outline.withValues(alpha: 0.2),
-            width: 1,
-          ),
+          top: BorderSide(color: theme.colorScheme.outline.withValues(alpha: 0.2), width: 1),
         ),
       ),
       child: InkWell(
@@ -265,8 +246,7 @@ class _HeadersTabWidgetState extends State<HeadersTabWidget> {
                       color: theme.colorScheme.onSurfaceVariant,
                       size: 18,
                     ),
-                    onPressed: () =>
-                        _copyToClipboard(context, '\$key: \$value'),
+                    onPressed: () => _copyToClipboard(context, '\$key: \$value'),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -302,10 +282,7 @@ class _HeadersTabWidgetState extends State<HeadersTabWidget> {
 
   void _copyToClipboard(BuildContext context, String text) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Copied to clipboard'),
-        duration: const Duration(seconds: 2),
-      ),
+      SnackBar(content: Text('Copied to clipboard'), duration: const Duration(seconds: 2)),
     );
   }
 }

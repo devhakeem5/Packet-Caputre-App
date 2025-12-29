@@ -234,7 +234,7 @@ class RequestCardWidget extends StatelessWidget {
 
                 // URL
                 Text(
-                  request["destinationUrl"] as String,
+                  request["destinationUrl"] as String? ??'Null',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurface,
                   ),

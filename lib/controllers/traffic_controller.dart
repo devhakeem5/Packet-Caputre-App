@@ -1,9 +1,13 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/captured_request.dart';
+import '../core/utils/certificate_manager.dart';
 import '../core/widgets/custom_buttom_bar.dart';
 import 'capture_controller.dart';
 
@@ -14,6 +18,9 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
   // Mock data for network requests
   RxList<Map<String, dynamic>> allRequests = <Map<String, dynamic>>[].obs;
   RxList<Map<String, dynamic>> filteredRequests = <Map<String, dynamic>>[].obs;
+
+  // Maximum requests to store in memory (prevent OOM on low-end devices)
+  static const int MAX_REQUESTS = 1000;
 
   // Search and filter state
   RxString searchQuery = ''.obs;
@@ -27,6 +34,9 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
   RxList<String> searchHistory = <String>[].obs;
   RxBool httpEnabled = true.obs;
   RxBool httpsEnabled = true.obs;
+  RxBool hideUnknownApps = false.obs;
+  RxBool hideSystemApps = false.obs; // New: Hide system apps filter
+  RxBool hideEncryptedTraffic = false.obs; // New: Encrypted traffic filter
 
   // Tab controllers
   late TabController tabController;
@@ -38,11 +48,17 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
   // Event Channel
   static const eventChannel = EventChannel('com.example.packet_capture/events');
 
+  final CertificateManager certificateManager = CertificateManager();
+  RxBool isCaGenerated = false.obs;
+
   @override
   void onInit() {
     super.onInit();
     requestListTabController = TabController(length: 4, vsync: this);
     tabController = TabController(length: 4, vsync: this);
+
+    _loadPersistentFilters();
+    _loadRequestHistory(); // Load saved requests
 
     // Load selected apps from CaptureController
     try {
@@ -58,6 +74,82 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
 
     filteredRequests.assignAll(allRequests); // Initially empty
     _loadPersistentFilters();
+    _checkCaStatus();
+  }
+
+  Future<void> _checkCaStatus() async {
+    isCaGenerated.value = await certificateManager.caExists();
+  }
+
+  Future<void> saveRootCa() async {
+    try {
+      if (!isCaGenerated.value) {
+        await certificateManager.exportCertificateToDownloads();
+        isCaGenerated.value = true;
+      }
+
+      // Share/Save the certificate file
+      await certificateManager.shareCertificate();
+    } catch (e) {
+      print("Error saving certificate: $e");
+      Get.snackbar("Error", "Failed to save certificate: $e");
+    }
+  }
+
+  Future<void> verifyRootCa() async {
+    final verified = await certificateManager.verifyInstallation();
+    if (verified) {
+      Get.snackbar(
+        "Verification",
+        "Certificate is accessible. Please confirm it is installed in Settings > Encryption & Credentials.",
+      );
+    } else {
+      Get.snackbar("Error", "Certificate file verification failed.");
+    }
+  }
+
+  void _subscribeToNativeEvents() {
+    eventChannel.receiveBroadcastStream().listen(
+      _onEvent,
+      onError: (error) {
+        print("Flutter: Error receiving traffic event: $error");
+      },
+    );
+  }
+
+  // Load saved request history from SharedPreferences
+  Future<void> _loadRequestHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final historyJson = prefs.getString('request_history');
+
+      if (historyJson != null && historyJson.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(historyJson);
+        final savedRequests = decoded.cast<Map<String, dynamic>>().toList();
+
+        // Restore saved requests (newest first)
+        allRequests.addAll(savedRequests);
+        print("Loaded ${savedRequests.length} saved requests from history");
+        applyFiltersAndSort();
+      }
+    } catch (e) {
+      print("Error loading request history: $e");
+    }
+  }
+
+  // Save request history to SharedPreferences (keep last 100 requests)
+  Future<void> _saveRequestHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      // Save only last 100 requests to avoid growing storage
+      final requestsToSave = allRequests.take(100).toList();
+      final encoded = jsonEncode(requestsToSave);
+
+      await prefs.setString('request_history', encoded);
+    } catch (e) {
+      print("Error saving request history: $e");
+    }
   }
 
   void _onEvent(dynamic event) {
@@ -67,14 +159,16 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
     if (event is Map) {
       print("Event keys: ${event.keys.toList()}");
     }
-    
+
     if (event is Map) {
       try {
         final request = CapturedRequest.fromJson(event);
         final direction = event['direction'] as String? ?? "outgoing";
         final payloadSize = event['payloadSize'] as int? ?? event['size'] as int? ?? 0;
-        
-        print("Flutter: Parsed packet: ${request.protocol} ${request.method} -> ${request.url} (${direction}, ${payloadSize}B)");
+
+        print(
+          "Flutter: Parsed packet: ${request.protocol} ${request.method} -> ${request.url} ($direction, ${payloadSize}B)",
+        );
         print("App: ${request.appPackage ?? 'unknown'} (${request.appName ?? 'Unknown App'})");
 
         // 1. Filter based on selected apps (if any are selected)
@@ -99,9 +193,10 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
           }
         }
 
-        // 2. Filter empty payload (Keep-alives/ACKs without data, tunnel-only events)
-        if (payloadSize <= 0) {
-          print("Flutter: Skipped event: empty payload (tunnel-only/handshake)");
+        // 2. Filter ONLY pure handshake/ACK packets (no method, no URL)
+        // Allow all HTTP/HTTPS proxy events even if they have 0 payload initially
+        if (payloadSize <= 0 && request.method.isEmpty) {
+          print("Flutter: Skipped event: empty handshake packet");
           return;
         }
 
@@ -113,13 +208,24 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
         }
 
         final totalSize = request.requestSize + request.responseSize;
+        // Parse URL to extract IP and port information
+        final uri = Uri.tryParse(request.url);
+        String? destIp;
+        int? destPort;
+
+        if (uri != null) {
+          destIp = uri.host;
+          destPort = uri.hasPort ? uri.port : null;
+        }
+
         final requestMap = {
           "id": request.id,
           "appName": request.appName ?? "Unknown",
           "appPackage": request.appPackage ?? "",
+          "packageName": request.appPackage ?? "", // Same as appPackage for consistency
           "appIcon": "", // No icon for now, placeholder or fetch usage
           "semanticLabel": "App Icon",
-          "destinationUrl": request.url,
+          "url": request.url, // Changed from destinationUrl to url to match RequestDetailsScreen
           "domain": request.domain,
           "method": request.method,
           "protocol": request.protocol,
@@ -130,13 +236,63 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
           "responseTime": "${request.responseTime} ms",
           "headers": request.headers,
           "direction": direction,
+
+          // Additional fields for Overview tab
+          "appVersion": "N/A",
+          "destinationIp": destIp ?? request.domain,
+          "port": destPort,
+          "protocolVersion": "N/A",
+          "requestId": request.id,
+          "connectionType": direction == "incoming" ? "Inbound" : "Outbound",
+          "isEncrypted":
+              request.protocol.toUpperCase().contains("HTTPS") ||
+              request.protocol.toUpperCase().contains("TLS"),
+
+          // Data transfer fields (convert from string to int)
+          "bytesSent": request.requestSize,
+          "bytesReceived": request.responseSize,
+
+          // Headers tab fields
+          "requestHeaders": request.headers,
+          "responseHeaders": event['responseHeaders'] ?? {},
+
+          // Response tab fields
+          "responseBody": event['responseBody'] ?? "",
+          "requestBody": event['requestBody'] ?? "",
+          "contentType":
+              (event['responseHeaders'] ?? {})['Content-Type'] ?? "application/octet-stream",
+
+          // Timing tab fields
+          "dnsLookupTime": 0,
+          "connectionTime": 0,
+          "sslHandshakeTime": 0,
+          "requestSentTime": 0,
+          "waitingTime": 0,
+          "downloadTime": request.responseTime,
+          "isDecrypted": request.isDecrypted, // Add decryption status
+          "isSystemApp": request.isSystemApp,
         };
 
         allRequests.insert(0, requestMap);
-        print("✓ Flutter: Displayed traffic event for ${request.appPackage} (${request.protocol} ${request.method}, ${totalSize}B)");
+
+        // Cleanup old requests if limit exceeded (FIFO - First In, First Out)
+        if (allRequests.length > MAX_REQUESTS) {
+          final removed = allRequests.length - MAX_REQUESTS;
+          allRequests.removeRange(MAX_REQUESTS, allRequests.length);
+          print("Memory cleanup: Removed $removed old requests (limit: $MAX_REQUESTS)");
+        }
+
+        print(
+          "✓ Flutter: Displayed traffic event for ${request.appPackage} (${request.protocol} ${request.method}, ${totalSize}B)",
+        );
         print("Total requests: ${allRequests.length}");
         print("═══════════════════════════════════════════════════════");
         applyFiltersAndSort();
+
+        // Save history periodically (every 10 requests to avoid excessive I/O)
+        if (allRequests.length % 10 == 0) {
+          _saveRequestHistory();
+        }
       } catch (e, stackTrace) {
         print("Flutter: Error parsing event: $e");
         print("Flutter: Stack trace: $stackTrace");
@@ -165,6 +321,9 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
     searchHistory.assignAll(prefs.getStringList('search_history') ?? []);
     httpEnabled.value = prefs.getBool('http_enabled') ?? true;
     httpsEnabled.value = prefs.getBool('https_enabled') ?? true;
+    hideUnknownApps.value = prefs.getBool('hide_unknown_apps') ?? false;
+    hideSystemApps.value = prefs.getBool('hide_system_apps') ?? false;
+    hideEncryptedTraffic.value = prefs.getBool('hide_encrypted_traffic') ?? false;
     applyFiltersAndSort();
   }
 
@@ -176,6 +335,9 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
     await prefs.setStringList('search_history', searchHistory);
     await prefs.setBool('http_enabled', httpEnabled.value);
     await prefs.setBool('https_enabled', httpsEnabled.value);
+    await prefs.setBool('hide_unknown_apps', hideUnknownApps.value);
+    await prefs.setBool('hide_system_apps', hideSystemApps.value);
+    await prefs.setBool('hide_encrypted_traffic', hideEncryptedTraffic.value);
   }
 
   // Add domain to blocklist
@@ -210,6 +372,27 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
     } else if (protocol == 'HTTPS') {
       httpsEnabled.value = !httpsEnabled.value;
     }
+    _savePersistentFilters();
+    applyFiltersAndSort();
+  }
+
+  // Toggle hide unknown apps
+  void toggleHideUnknownApps() {
+    hideUnknownApps.value = !hideUnknownApps.value;
+    _savePersistentFilters();
+    applyFiltersAndSort();
+  }
+
+  // Toggle encrypted traffic filter
+  void toggleHideEncryptedTraffic() async {
+    hideEncryptedTraffic.value = !hideEncryptedTraffic.value;
+    _savePersistentFilters();
+    applyFiltersAndSort();
+  }
+
+  // Toggle hide system apps
+  void toggleHideSystemApps() async {
+    hideSystemApps.value = !hideSystemApps.value;
     _savePersistentFilters();
     applyFiltersAndSort();
   }
@@ -276,7 +459,7 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
     if (searchQuery.value.isNotEmpty) {
       final searchLower = searchQuery.value.toLowerCase();
       filtered = filtered.where((request) {
-        final url = (request["destinationUrl"] as String).toLowerCase();
+        final url = (request["url"] as String).toLowerCase();
         final domain = (request["domain"] as String).toLowerCase();
         final appName = (request["appName"] as String).toLowerCase();
         return url.contains(searchLower) ||
@@ -308,6 +491,43 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
       if (protocol == 'HTTPS' && !httpsEnabled.value) return false;
       return true;
     }).toList();
+
+    // Apply unknown apps filter
+    if (hideUnknownApps.value) {
+      filtered = filtered.where((request) {
+        final appName = request["appName"] as String?;
+        final appPackage = request["appPackage"] as String?;
+        // Keep only if we have valid app name (not Unknown) and package
+        return appName != null &&
+            appName != "Unknown" &&
+            appName != "Unknown App" &&
+            appPackage != null &&
+            appPackage.isNotEmpty;
+      }).toList();
+    }
+
+    // Apply Hide System Apps Filter
+    if (hideSystemApps.value) {
+      filtered = filtered.where((request) {
+        final isSystem = request["isSystemApp"] as bool? ?? false;
+        return !isSystem;
+      }).toList();
+    }
+
+    // Apply Encrypted Traffic Filter
+    // User wants: "Show All" or "Show Unencrypted Only"
+    // "Show unencrypted only" means hideEncryptedTraffic = true
+    if (hideEncryptedTraffic.value) {
+      filtered = filtered.where((request) {
+        final isDecrypted = request["isDecrypted"] as bool? ?? false;
+        // If it's NOT decrypted (meaning it's encrypted/tunnelled), hide it.
+        // So we only keep isDecrypted == true.
+        if (!isDecrypted) {
+          return false;
+        }
+        return true;
+      }).toList();
+    }
 
     // Apply method filters
     if (activeFilters.isNotEmpty) {

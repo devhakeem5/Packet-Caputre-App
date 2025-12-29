@@ -269,63 +269,68 @@ class RequestListScreen extends StatelessWidget {
           controller: scrollController,
           child: Column(
             children: [
-              // Method filters
+              // Visibility Filters (Simplified)
               Container(
                 padding: EdgeInsets.all(4.w),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Methods', style: Theme.of(context).textTheme.titleMedium),
+                    Text('Visibility Settings', style: Theme.of(context).textTheme.titleMedium),
                     SizedBox(height: 2.h),
-                    Wrap(
-                      spacing: 2.w,
-                      runSpacing: 1.h,
-                      children: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD']
-                          .map(
-                            (method) => Obx(
-                              () => FilterChip(
-                                label: Text(method),
-                                selected: trafficController.activeFilters.contains(method),
-                                onSelected: (selected) => trafficController.toggleFilter(method),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ],
-                ),
-              ),
 
-              // Protocol filters
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 4.w),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Protocols', style: Theme.of(context).textTheme.titleMedium),
-                    SizedBox(height: 2.h),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Obx(
-                            () => FilterChip(
-                              label: const Text('HTTP'),
-                              selected: trafficController.httpEnabled.value,
-                              onSelected: (selected) => trafficController.toggleProtocol('HTTP'),
-                            ),
+                    // Hide System Apps
+                    Obx(
+                      () => SwitchListTile(
+                        title: const Text('Hide System Apps'),
+                        subtitle: const Text('Show only user-installed applications'),
+                        value: trafficController.hideSystemApps.value,
+                        onChanged: (val) => trafficController.toggleHideSystemApps(),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+
+                    SizedBox(height: 1.h),
+                    Text(
+                      'Encrypted Traffic',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+
+                    // Show All vs Unencrypted Only
+                    Obx(
+                      () => Column(
+                        children: [
+                          RadioListTile<bool>(
+                            title: const Text('Show All Requests'),
+                            value: false, // hideEncryptedTraffic = false
+                            groupValue: trafficController.hideEncryptedTraffic.value,
+                            onChanged: (val) {
+                              if (val != null && val == false) {
+                                // User wants to show all (encrypted + unencrypted)
+                                if (trafficController.hideEncryptedTraffic.value == true) {
+                                  trafficController.toggleHideEncryptedTraffic();
+                                }
+                              }
+                            },
+                            contentPadding: EdgeInsets.zero,
                           ),
-                        ),
-                        SizedBox(width: 2.w),
-                        Expanded(
-                          child: Obx(
-                            () => FilterChip(
-                              label: const Text('HTTPS'),
-                              selected: trafficController.httpsEnabled.value,
-                              onSelected: (selected) => trafficController.toggleProtocol('HTTPS'),
-                            ),
+                          RadioListTile<bool>(
+                            title: const Text('Show Unencrypted Requests Only'),
+                            value: true, // hideEncryptedTraffic = true
+                            groupValue: trafficController.hideEncryptedTraffic.value,
+                            onChanged: (val) {
+                              if (val != null && val == true) {
+                                // User wants to hide encrypted traffic
+                                if (trafficController.hideEncryptedTraffic.value == false) {
+                                  trafficController.toggleHideEncryptedTraffic();
+                                }
+                              }
+                            },
+                            contentPadding: EdgeInsets.zero,
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ],
                 ),
