@@ -120,6 +120,72 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     }
                 }
+                "getAppPermissions" -> {
+                    val packageName = call.argument<String>("packageName")
+                    if (packageName == null) {
+                        result.error("INVALID_ARGUMENT", "Package name is required", null)
+                        return@setMethodCallHandler
+                    }
+
+                    try {
+                        val pm = packageManager
+                        val packageInfo = pm.getPackageInfo(packageName, android.content.pm.PackageManager.GET_PERMISSIONS)
+
+                        val permissionsList = mutableListOf<Map<String, Any?>>()
+                        val requestedPermissions = packageInfo.requestedPermissions
+
+                        if (requestedPermissions != null) {
+                            for (permName in requestedPermissions) {
+                                val permData = mutableMapOf<String, Any?>()
+                                permData["name"] = permName
+
+                                try {
+                                    val permInfo = pm.getPermissionInfo(permName, 0)
+                                    val label = permInfo.loadLabel(pm).toString()
+                                    val description = permInfo.loadDescription(pm)?.toString()
+                                    
+                                    permData["label"] = label
+                                    permData["description"] = description
+                                    
+                                    val groupName = permInfo.group
+                                    if (groupName != null) {
+                                        try {
+                                            val groupInfo = pm.getPermissionGroupInfo(groupName, 0)
+                                            val drawable = groupInfo.loadIcon(pm)
+                                            if (drawable != null) {
+                                                val bitmap = if (drawable is android.graphics.drawable.BitmapDrawable) {
+                                                    drawable.bitmap
+                                                } else {
+                                                    val bmp = android.graphics.Bitmap.createBitmap(
+                                                        drawable.intrinsicWidth.coerceAtLeast(1),
+                                                        drawable.intrinsicHeight.coerceAtLeast(1),
+                                                        android.graphics.Bitmap.Config.ARGB_8888
+                                                    )
+                                                    val canvas = android.graphics.Canvas(bmp)
+                                                    drawable.setBounds(0, 0, canvas.width, canvas.height)
+                                                    drawable.draw(canvas)
+                                                    bmp
+                                                }
+                                                val stream = java.io.ByteArrayOutputStream()
+                                                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 80, stream)
+                                                permData["iconBytes"] = stream.toByteArray()
+                                            }
+                                        } catch (e: Exception) {
+                                            // Icon load failed
+                                        }
+                                    }
+                                } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+                                    permData["label"] = permName
+                                }
+                                
+                                permissionsList.add(permData)
+                            }
+                        }
+                        result.success(permissionsList)
+                    } catch (e: Exception) {
+                         result.error("ERROR", "Failed to fetch permissions: ${e.message}", null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }

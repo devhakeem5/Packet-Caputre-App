@@ -14,6 +14,7 @@ class AppListItemWidget extends StatelessWidget {
   final Map<String, dynamic> app;
   final bool isSelected;
   final VoidCallback onToggle;
+  final VoidCallback? onLongPress;
   final VoidCallback onTap;
 
   const AppListItemWidget({
@@ -22,6 +23,7 @@ class AppListItemWidget extends StatelessWidget {
     required this.isSelected,
     required this.onToggle,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -55,6 +57,7 @@ class AppListItemWidget extends StatelessWidget {
       ),
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Container(
           padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.5.h),
           decoration: BoxDecoration(

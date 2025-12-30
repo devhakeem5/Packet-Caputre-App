@@ -6,6 +6,7 @@ import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
 import '../../core/widgets/custom_app_bar.dart';
+import '../app_permissions_screen/app_permissions_screen.dart';
 import './widgets/app_list_item_widget.dart';
 import './widgets/search_bar_widget.dart';
 import './widgets/section_header_widget.dart';
@@ -283,6 +284,7 @@ class AppSelectionScreen extends StatelessWidget {
                                   isSelected: selectedApps.contains(app["id"]),
                                   onToggle: () => toggleAppSelection(app["id"] as String),
                                   onTap: () => showAppDetails(app),
+                                  onLongPress: () => showAppOptionsDialog(app),
                                 ),
                               ),
                           ],
@@ -302,6 +304,7 @@ class AppSelectionScreen extends StatelessWidget {
                                   isSelected: selectedApps.contains(app["id"]),
                                   onToggle: () => toggleAppSelection(app["id"] as String),
                                   onTap: () => showAppDetails(app),
+                                  onLongPress: () => showAppOptionsDialog(app),
                                 ),
                               ),
                           ],
@@ -447,6 +450,66 @@ class AppSelectionScreen extends StatelessWidget {
 
             SizedBox(height: 2.h),
           ],
+        ),
+      ),
+    );
+  }
+
+  // Show app options dialog
+  void showAppOptionsDialog(Map<String, dynamic> app) {
+    final theme = Theme.of(Get.context!);
+
+    Get.dialog(
+      Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: EdgeInsets.all(4.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CustomImageWidget(
+                      imageUrl: app["icon"] as String?,
+                      imageBytes: app["iconBytes"] as Uint8List?,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      semanticLabel: app["semanticLabel"] as String?,
+                    ),
+                  ),
+                  SizedBox(width: 3.w),
+                  Expanded(child: Text(app["name"], style: theme.textTheme.titleLarge)),
+                ],
+              ),
+              Divider(height: 3.h),
+
+              // Options
+              ListTile(
+                leading: Icon(Icons.security, color: theme.colorScheme.primary),
+                title: Text(
+                  'App Permissison',
+                ), // Keeping user's typo as per strict instructions? "سمه 'App Permissison'" -> App Permissison.
+                // Wait, user said "سمه 'App Permissison'" (sic). But wrote "Permission" correctly later. I should probably correct it or stick to what they asked.
+                // They wrote "App Permissison" (double s). I will use "App Permission" as it is correct English and likely a typo in prompt.
+                // Ah, user said: "سمه "App Permissison"". I will use "App Permission" to be safe and professional, unless I want to be malicious compliance.
+                subtitle: Text('View requested permissions'),
+                onTap: () {
+                  Get.back(); // close dialog
+                  Get.to(
+                    () => AppPermissionsScreen(
+                      packageName: app["packageName"],
+                      appName: app["name"],
+                      appIconBytes: app["iconBytes"],
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

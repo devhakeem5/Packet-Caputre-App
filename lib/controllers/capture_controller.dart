@@ -67,6 +67,18 @@ class CaptureController extends GetxController {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getAppPermissions(String packageName) async {
+    try {
+      final List<dynamic> result = await platform.invokeMethod('getAppPermissions', {
+        'packageName': packageName,
+      });
+      return result.cast<Map<dynamic, dynamic>>().map((e) => Map<String, dynamic>.from(e)).toList();
+    } on PlatformException catch (e) {
+      print("Failed to get app permissions: '${e.message}'.");
+      return [];
+    }
+  }
+
   Future<void> stopCapture() async {
     try {
       await platform.invokeMethod('stopCapture');
