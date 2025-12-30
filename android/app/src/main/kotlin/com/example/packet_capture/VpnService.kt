@@ -62,7 +62,8 @@ class VpnService : VpnService() {
         var httpMethod: String? = null,
         val requestHeaders: MutableMap<String, String> = mutableMapOf(),
         var lastActivityTime: Long = System.currentTimeMillis(),
-        var eventSent: Boolean = false // To avoid duplicate events
+        var eventSent: Boolean = false, // To avoid duplicate events
+        var appInfo: Map<String, Any>? = null
     )
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -104,7 +105,9 @@ class VpnService : VpnService() {
             startTrafficLoop()
             
             // Start Local HTTP Proxy
-            proxyServer = HttpProxyServer(PROXY_PORT)
+            proxyServer = HttpProxyServer(PROXY_PORT) { socket ->
+                this.protect(socket)
+            }
             proxyServer?.start(applicationContext)
 
             Log.d(TAG, "VPN Started - Monitoring all traffic")
@@ -306,6 +309,7 @@ class VpnService : VpnService() {
                      Log.e(TAG, "UDP Channel FAILED to Connect to $destIp:$destPort")
                 }
 
+                selector?.wakeup()
                 channel.register(selector, SelectionKey.OP_READ, key)
                 udpTable[key] = channel
             }
@@ -396,11 +400,19 @@ class VpnService : VpnService() {
         
         // Get or create connection tracker
         var tracker = connectionData[key]
-        if (tracker == null && payloadLen > 0) {
+        if (tracker == null && (payloadLen > 0 || isSyn)) {
             tracker = ConnectionTracker(
                 connectionKey = key,
                 startTime = System.currentTimeMillis()
             )
+            
+            // Capture App Info immediately while connection is active
+            val tempMeta = mutableMapOf<String, Any>(
+                "srcIp" to srcIp, "destIp" to destIp, "srcPort" to srcPort, "destPort" to destPort
+            )
+            fillAppInfo(srcPort, "tcp", tempMeta)
+            tracker.appInfo = tempMeta.filterKeys { it == "uid" || it == "package" || it == "appName" || it == "isSystemApp" || it == "appIcon" }
+            
             connectionData[key] = tracker
         }
 
@@ -432,10 +444,17 @@ class VpnService : VpnService() {
                         val localPort = channel.socket().localPort
                         if (localPort != -1) {
                             val appMeta = mutableMapOf<String, String>()
-                            tracker?.let {
-                                appMeta["package"] = meta["package"] as? String ?: ""
-                                appMeta["appName"] = meta["appName"] as? String ?: ""
-                                appMeta["uid"] = meta["uid"].toString()
+                            tracker?.let { t ->
+                                val info = t.appInfo
+                                if (info != null) {
+                                    appMeta["package"] = info["package"] as? String ?: ""
+                                    appMeta["appName"] = info["appName"] as? String ?: ""
+                                    appMeta["uid"] = info["uid"]?.toString() ?: ""
+                                } else {
+                                    appMeta["package"] = meta["package"] as? String ?: ""
+                                    appMeta["appName"] = meta["appName"] as? String ?: ""
+                                    appMeta["uid"] = meta["uid"]?.toString() ?: ""
+                                }
                             }
                             HttpProxyServer.registerSession(localPort, appMeta)
                             Log.d(TAG, "Registered Proxy Session: LocalPort $localPort -> ${appMeta["package"]}")
@@ -443,6 +462,7 @@ class VpnService : VpnService() {
                     } else {
                         channel.connect(InetSocketAddress(destIp, destPort))
                     }
+                    selector?.wakeup()
                     channel.register(selector, SelectionKey.OP_CONNECT, key)
                     
                     session = TcpSession(channel, key, seq + 1, 0, 0, 0)
@@ -468,20 +488,27 @@ class VpnService : VpnService() {
                          val localPort = channel.socket().localPort
                         if (localPort != -1) {
                             val appMeta = mutableMapOf<String, String>()
-                             // tracker might be null here if new session? No, we created tracker above 
-                             // Wait, tracker is created at line 380ish.
-                             // But we need to make sure we populate it.
-                            val pkg = meta["package"] as? String
-                            if (pkg != null) {
-                                appMeta["package"] = pkg
-                                appMeta["appName"] = meta["appName"] as? String ?: ""
-                                appMeta["uid"] = meta["uid"].toString()
-                                HttpProxyServer.registerSession(localPort, appMeta)
-                            }
+                            // Use tracker info if available (it should be, as we just created/retrieved tracker)
+                             val info = connectionData[key]?.appInfo
+                             if (info != null) {
+                                 appMeta["package"] = info["package"] as? String ?: ""
+                                 appMeta["appName"] = info["appName"] as? String ?: ""
+                                 appMeta["uid"] = info["uid"]?.toString() ?: ""
+                                 HttpProxyServer.registerSession(localPort, appMeta)
+                             } else {
+                                val pkg = meta["package"] as? String
+                                if (pkg != null) {
+                                    appMeta["package"] = pkg
+                                    appMeta["appName"] = meta["appName"] as? String ?: ""
+                                    appMeta["uid"] = meta["uid"].toString()
+                                    HttpProxyServer.registerSession(localPort, appMeta)
+                                }
+                             }
                         }
                     } else {
                         channel.connect(InetSocketAddress(destIp, destPort))
                     }
+                    selector?.wakeup()
                     channel.register(selector, SelectionKey.OP_CONNECT, key)
                     
                     session = TcpSession(channel, key, seq, 0, 0, 0)
@@ -828,6 +855,13 @@ class VpnService : VpnService() {
                 val remoteSock = InetSocketAddress(remoteAddress, destPort)
                 
                 uid = connectivityManager.getConnectionOwnerUid(protocolInt, localSock, remoteSock)
+                
+                // Retry with wildcard 0.0.0.0 if failed (sometimes connections are bound to ANY)
+                if (uid == null || uid == -1) {
+                     val wildcardSock = InetSocketAddress("0.0.0.0", srcPort)
+                     uid = connectivityManager.getConnectionOwnerUid(protocolInt, wildcardSock, remoteSock)
+                }
+
                 if (uid != null && uid != -1) {
                      Log.d(TAG, "Found Connection Owner UID: $uid")
                 }
@@ -1174,7 +1208,12 @@ class VpnService : VpnService() {
         }
         
         // Fill app info
-        fillAppInfo(srcPort, "tcp", meta)
+        // Fill app info (use cached if available, otherwise try to resolve)
+        if (tracker.appInfo != null && tracker.appInfo!!.isNotEmpty()) {
+            meta.putAll(tracker.appInfo!!)
+        } else {
+            fillAppInfo(srcPort, "tcp", meta)
+        }
         
         TrafficHandler.sendPacket(meta)
         Log.d(TAG, "✓ Sent aggregated event: $url (${tracker.totalBytesSent}B)")

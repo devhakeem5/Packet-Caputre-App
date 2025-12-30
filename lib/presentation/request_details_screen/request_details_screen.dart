@@ -73,7 +73,7 @@ class RequestDetailsScreen extends StatelessWidget {
 
   Widget buildRequestHeader(BuildContext context) {
     final theme = Theme.of(context);
-    final url = requestData['url'] as String;
+    final url = requestData['domain'] as String;
     final method = requestData['method'] as String;
     final statusCode = requestData['statusCode'] as int;
     final timestamp = requestData['timestamp'] as DateTime;

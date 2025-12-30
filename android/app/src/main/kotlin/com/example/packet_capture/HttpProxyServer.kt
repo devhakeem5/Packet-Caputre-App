@@ -5,6 +5,7 @@ import android.util.Log
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.Executors
@@ -13,7 +14,7 @@ import javax.net.ssl.SSLSocket
 import kotlin.concurrent.thread
 import kotlin.math.min
 
-class HttpProxyServer(private val port: Int) {
+class HttpProxyServer(private val port: Int, private val protectSocket: (Socket) -> Boolean) {
 
     companion object {
         const val TAG = "HttpProxyServer"
@@ -84,6 +85,8 @@ class HttpProxyServer(private val port: Int) {
 
     private fun handleClient(clientSocket: Socket) {
         var targetSocket: Socket? = null
+        var requestMeta: MutableMap<String, Any>? = null
+        
         try {
             val clientIn = clientSocket.getInputStream()
             val clientOut = clientSocket.getOutputStream()
@@ -130,11 +133,52 @@ class HttpProxyServer(private val port: Int) {
             val targetPort = if (hostParts.size > 1) hostParts[1].toInt() else 80
 
             Log.d(TAG, "Proxying $method $url to $targetHost:$targetPort")
+            
+            // PREPARE METADATA EARLY (So we can report failures)
+            requestMeta = mutableMapOf<String, Any>(
+                "id" to System.nanoTime().toString(),
+                "timestamp" to System.currentTimeMillis(),
+                "protocol" to "HTTP",
+                "method" to method,
+                "url" to "http://$hostHeader$url",
+                "domain" to targetHost,
+                "headers" to headers,
+                "requestSize" to 0, // Will update
+                "responseSize" to 0,
+                "responseTime" to 0
+            )
 
-            // 3. Connect to Target
-            targetSocket = Socket(targetHost, targetPort)
-            val targetIn = targetSocket.getInputStream()
-            val targetOut = targetSocket.getOutputStream()
+            // Inject App Metadata
+            appMeta?.let {
+                requestMeta!!["package"] = it["package"] ?: "unknown"
+                requestMeta!!["appName"] = it["appName"] ?: "Unknown"
+                requestMeta!!["uid"] = it["uid"]?.toIntOrNull() ?: 0
+            }
+
+            // 3. Connect to Target (PROTECTED)
+            try {
+                targetSocket = Socket()
+                if (!protectSocket(targetSocket!!)) {
+                     Log.e(TAG, "Failed to protect socket for $targetHost")
+                     throw java.net.ConnectException("Failed to protect socket")
+                }
+                targetSocket!!.connect(InetSocketAddress(targetHost, targetPort), 10000) // 10s timeout
+            } catch (e: Exception) {
+                Log.e(TAG, "Connection failed to $targetHost: $e")
+                // Report failure
+                 requestMeta!!["statusCode"] = 504 // Gateway Timeout / Error
+                 requestMeta!!["responseBody"] = "Connection Failed: ${e.message}"
+                 requestMeta!!["responseHeaders"] = mapOf("Content-Type" to "text/plain")
+                 TrafficHandler.sendPacket(requestMeta!!)
+                 
+                 // Send error to client
+                 val err = "HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\n\r\nConnection Failed: ${e.message}"
+                 clientOut.write(err.toByteArray())
+                 return
+            }
+            
+            val targetIn = targetSocket!!.getInputStream()
+            val targetOut = targetSocket!!.getOutputStream()
 
             // 4. Forward Request
             val initialPayload = StringBuilder()
@@ -145,28 +189,8 @@ class HttpProxyServer(private val port: Int) {
             
             // If POST/PUT, we might have a body. Check Content-Length.
             val contentLength = (headers["Content-Length"] ?: headers["content-length"])?.toLongOrNull() ?: 0L
+            requestMeta!!["requestSize"] = initialPayload.length + contentLength
             
-            // Capture Request Data
-            val requestMeta = mutableMapOf<String, Any>(
-                "id" to System.nanoTime().toString(),
-                "timestamp" to System.currentTimeMillis(),
-                "protocol" to "HTTP",
-                "method" to method,
-                "url" to "http://$hostHeader$url",
-                "domain" to targetHost,
-                "headers" to headers,
-                "requestSize" to initialPayload.length + contentLength,
-                "responseSize" to 0,
-                "responseTime" to 0
-            )
-
-            // Inject App Metadata
-            appMeta?.let {
-                requestMeta["package"] = it["package"] ?: "unknown"
-                requestMeta["appName"] = it["appName"] ?: "Unknown"
-                requestMeta["uid"] = it["uid"]?.toIntOrNull() ?: 0
-            }
-
             if (contentLength > 0) {
                  // Forward body
                  val buffer = ByteArray(4096)
@@ -189,12 +213,12 @@ class HttpProxyServer(private val port: Int) {
                  // Check if content is binary based on request Content-Type
                  val contentType = (headers["Content-Type"] ?: headers["content-type"] ?: "").lowercase()
                  if (isBinaryContentType(contentType)) {
-                     requestMeta["requestBody"] = "[Binary Data - ${bodyBuilder.size()} bytes]"
+                     requestMeta!!["requestBody"] = "[Binary Data - ${bodyBuilder.size()} bytes]"
                  } else {
                      try {
-                         requestMeta["requestBody"] = bodyBuilder.toString("UTF-8")
+                         requestMeta!!["requestBody"] = bodyBuilder.toString("UTF-8")
                      } catch (e: Exception) {
-                         requestMeta["requestBody"] = "[Data - ${bodyBuilder.size()} bytes]"
+                         requestMeta!!["requestBody"] = "[Data - ${bodyBuilder.size()} bytes]"
                      }
                  }
             }
@@ -212,9 +236,9 @@ class HttpProxyServer(private val port: Int) {
                 
                 clientOut.write(responseHeadBuffer.toString().toByteArray())
                 
-                requestMeta["statusCode"] = statusLine.split(" ").getOrNull(1)?.toIntOrNull() ?: 0
-                requestMeta["responseTime"] = System.currentTimeMillis() - (requestMeta["timestamp"] as Long)
-                requestMeta["responseHeaders"] = responseHeaders
+                requestMeta!!["statusCode"] = statusLine.split(" ").getOrNull(1)?.toIntOrNull() ?: 0
+                requestMeta!!["responseTime"] = System.currentTimeMillis() - (requestMeta!!["timestamp"] as Long)
+                requestMeta!!["responseHeaders"] = responseHeaders
                 
                 var totalBodyBytes = 0L
                 val bodyBuilder = java.io.ByteArrayOutputStream() // For response
@@ -235,27 +259,35 @@ class HttpProxyServer(private val port: Int) {
                 // Check if response is binary
                 val responseContentType = (responseHeaders["Content-Type"] ?: responseHeaders["content-type"] ?: "").lowercase()
                 if (isBinaryContentType(responseContentType)) {
-                    requestMeta["responseBody"] = "[Binary Data - ${bodyBuilder.size()} bytes]"
+                    requestMeta!!["responseBody"] = "[Binary Data - ${bodyBuilder.size()} bytes]"
                 } else {
                     try {
-                        requestMeta["responseBody"] = bodyBuilder.toString("UTF-8")
+                        requestMeta!!["responseBody"] = bodyBuilder.toString("UTF-8")
                     } catch (e: Exception) {
-                        requestMeta["responseBody"] = "[Data - ${bodyBuilder.size()} bytes]"
+                        requestMeta!!["responseBody"] = "[Data - ${bodyBuilder.size()} bytes]"
                     }
                 }
                 
-                requestMeta["responseSize"] = responseHeadBuffer.length + totalBodyBytes
+                requestMeta!!["responseSize"] = responseHeadBuffer.length + totalBodyBytes
                 
                 // 6. Emit Event
                 // Log only metadata for security (no bodies/headers in production)
-                Log.d(TAG, "HTTP Request: $method $targetHost$urlPath - Status: ${requestMeta["statusCode"]} - Size: ${requestMeta["responseSize"]}B")
-                TrafficHandler.sendPacket(requestMeta)
+                Log.d(TAG, "HTTP Request: $method $targetHost$url - Status: ${requestMeta!!["statusCode"]} - Size: ${requestMeta!!["responseSize"]}B")
+                TrafficHandler.sendPacket(requestMeta!!)
             } else {
-                TrafficHandler.sendPacket(requestMeta) // failed request?
+                 // Empty response from server
+                 requestMeta!!["statusCode"] = 502
+                 requestMeta!!["responseBody"] = "[Empty Response from Server]"
+                 TrafficHandler.sendPacket(requestMeta!!)
             }
 
         } catch (e: Exception) {
             Log.e(TAG, "Proxy handling error", e)
+             if (requestMeta != null) {
+                 requestMeta!!["statusCode"] = 500
+                 requestMeta!!["responseBody"] = "Proxy Error: ${e.message}"
+                 TrafficHandler.sendPacket(requestMeta!!)
+             }
         } finally {
             try { clientSocket.close() } catch (e: Exception) {}
             try { targetSocket?.close() } catch (e: Exception) {}
@@ -304,14 +336,23 @@ class HttpProxyServer(private val port: Int) {
     }
     
     private fun handleDecryptedHttps(clientSslSocket: Socket, targetHost: String, targetPort: Int, appMeta: Map<String, String>?) {
-        var targetSocket: SSLSocket? = null
+        var targetSocket: Socket? = null
         try {
             // Connect to Target as Client (SSL)
+            // MUST PROTECT SOCKET BEFORE SSL LAYER
+            val plainSocket = Socket()
+            if (!protectSocket(plainSocket)) {
+                throw java.net.ConnectException("Failed to protect HTTPS socket")
+            }
+            plainSocket.connect(InetSocketAddress(targetHost, targetPort), 10000)
+
             val sslContext = SSLContext.getInstance("TLS")
             sslContext.init(null, null, null) // Default trust
             val factory = sslContext.socketFactory
-            targetSocket = factory.createSocket(targetHost, targetPort) as SSLSocket
-            targetSocket.startHandshake()
+            
+            // Layer SSL over the protected socket
+            targetSocket = factory.createSocket(plainSocket, targetHost, targetPort, true) as SSLSocket
+            (targetSocket as SSLSocket).startHandshake()
             
             val clientIn = clientSslSocket.getInputStream()
             val clientOut = clientSslSocket.getOutputStream()
@@ -464,10 +505,17 @@ class HttpProxyServer(private val port: Int) {
                     // Log only metadata for security (no bodies/headers in production)
                     Log.d(TAG, "HTTPS Request: $method $targetHost - Status: ${requestMeta["statusCode"]} - Size: ${requestMeta["responseSize"]}B")
                     TrafficHandler.sendPacket(requestMeta)
+                } else {
+                    // Failed to read response headers from target
+                    requestMeta["statusCode"] = 502
+                    requestMeta["responseBody"] = "[Empty Response or Connection Closed]"
+                    TrafficHandler.sendPacket(requestMeta)
                 }
              }
         } catch (e: Exception) {
             Log.e(TAG, "HTTPS Decrypted Error", e)
+             // We can't easily emit an event here for a specific request if we broke out of the loop
+             // But if we were inside the loop and had requestMeta, we should have emitted it.
         } finally {
             try { clientSslSocket.close() } catch (e: Exception) {}
             try { targetSocket?.close() } catch (e: Exception) {}
@@ -478,7 +526,12 @@ class HttpProxyServer(private val port: Int) {
     private fun tunnelConnection(clientSocket: Socket, host: String, port: Int, appMeta: Map<String, String>?, decrypted: Boolean) {
         // Connect to Target
         try {
-            val targetSocket = Socket(host, port)
+            val targetSocket = Socket()
+            if (!protectSocket(targetSocket)) {
+                Log.e(TAG, "Tunnel: Failed to protect socket $host")
+                return 
+            }
+            targetSocket.connect(InetSocketAddress(host, port), 10000)
             
             val clientIn = clientSocket.getInputStream()
             val clientOut = clientSocket.getOutputStream()
@@ -515,6 +568,7 @@ class HttpProxyServer(private val port: Int) {
             t2.join()
         } catch (e: Exception) {
              Log.e(TAG, "Tunnel Error", e)
+             // Optional: Emit failed tunnel event
         } finally {
             try { clientSocket.close() } catch (e: Exception) {}
         }

@@ -1,16 +1,16 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
-import 'package:path_provider/path_provider.dart';
 
 class CertificateManager {
   static const _caCertKey = 'packet_capture_ca_cert';
   static const _caPrivateKeyKey = 'packet_capture_ca_private_key';
 
   static const _assetCertPath = 'assets/images/ca.crt';
-  static const _assetKeyPath  = 'assets/images/ca.key';
+  static const _assetKeyPath = 'assets/images/ca.key';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
@@ -25,17 +25,23 @@ class CertificateManager {
   /// Checks if CA cert + key are stored
   Future<bool> caExists() async {
     final cert = await _storage.read(key: _caCertKey);
-    final key  = await _storage.read(key: _caPrivateKeyKey);
+    final key = await _storage.read(key: _caPrivateKeyKey);
     return cert != null && key != null;
   }
 
   /// Loads CA certificate + private key from assets
   Future<void> _loadFromAssets() async {
     final certPem = await rootBundle.loadString(_assetCertPath);
-    final keyPem  = await rootBundle.loadString(_assetKeyPath);
+    final keyPem = await rootBundle.loadString(_assetKeyPath);
 
     await _storage.write(key: _caCertKey, value: certPem);
     await _storage.write(key: _caPrivateKeyKey, value: keyPem);
+  }
+
+  Future<Uint8List?> getCertificateBytes() async {
+    final data = await _storage.read(key: _caCertKey);
+    if (data == null) return null;
+    return base64Decode(data);
   }
 
   /// Returns CA certificate PEM
@@ -50,16 +56,13 @@ class CertificateManager {
 
   /// Writes certificate to Downloads for manual installation
   Future<File?> exportCertificateToDownloads() async {
-    final certPem = await _storage.read(key: _caCertKey);
-    if (certPem == null) return null;
+    final certPem = await rootBundle.loadString(_assetCertPath);
 
     final dir = Directory('/storage/emulated/0/Download');
-    if (!await dir.exists()) {
-      return null;
-    }
+    if (!await dir.exists()) return null;
 
     final file = File('${dir.path}/packet_capture_ca.crt');
-    await file.writeAsString(certPem);
+    await file.writeAsString(certPem, flush: true);
 
     return file;
   }
