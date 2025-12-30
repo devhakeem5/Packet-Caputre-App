@@ -25,7 +25,7 @@ class RequestListScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: CustomAppBar(
-        title: 'Network Requests',
+        title: 'Activity',
         variant: CustomAppBarVariant.withBackButton,
         actions: [
           // Sort button
@@ -111,14 +111,14 @@ class RequestListScreen extends StatelessWidget {
             child: TabBarView(
               controller: trafficController.requestListTabController,
               children: [
-                // All requests
+                // All requests (Saved)
                 Obx(
-                  () => trafficController.filteredRequests.isEmpty
-                      ? _buildEmptyState(theme)
+                  () => trafficController.savedRequests.isEmpty
+                      ? _buildEmptyState(theme, 'No saved requests')
                       : ListView.builder(
-                          itemCount: trafficController.filteredRequests.length,
+                          itemCount: trafficController.savedRequests.length,
                           itemBuilder: (context, index) {
-                            final request = trafficController.filteredRequests[index];
+                            final request = trafficController.savedRequests[index];
                             return RequestCardWidget(
                               request: request,
                               onTap: () => _navigateToDetails(request),
@@ -128,76 +128,69 @@ class RequestListScreen extends StatelessWidget {
                         ),
                 ),
 
-                // Active requests (placeholder)
+                // Active requests (Saved)
                 Obx(
-                  () =>
-                      trafficController.filteredRequests
-                          .where((r) => r['statusCode'] == 200)
-                          .isEmpty
-                      ? _buildEmptyState(theme)
+                  () => trafficController.savedRequests.where((r) => r['statusCode'] == 200).isEmpty
+                      ? _buildEmptyState(theme, 'No active saved requests')
                       : ListView.builder(
-                          itemCount: trafficController.filteredRequests
+                          itemCount: trafficController.savedRequests
                               .where((r) => r['statusCode'] == 200)
                               .length,
                           itemBuilder: (context, index) {
-                            final request = trafficController.filteredRequests
+                            final request = trafficController.savedRequests
                                 .where((r) => r['statusCode'] == 200)
                                 .toList()[index];
                             return RequestCardWidget(
-                              onSaveToggle: () => trafficController.toggleSaveRequest(request),
                               request: request,
                               onTap: () => _navigateToDetails(request),
+                              onSaveToggle: () => trafficController.toggleSaveRequest(request),
                             );
                           },
                         ),
                 ),
 
-                // Blocked requests (placeholder)
+                // Blocked requests (Saved)
                 Obx(
                   () =>
-                      trafficController.filteredRequests
+                      trafficController.savedRequests
                           .where((r) => trafficController.blockedDomains.contains(r['domain']))
                           .isEmpty
-                      ? _buildEmptyState(theme)
+                      ? _buildEmptyState(theme, 'No blocked saved requests')
                       : ListView.builder(
-                          itemCount: trafficController.filteredRequests
+                          itemCount: trafficController.savedRequests
                               .where((r) => trafficController.blockedDomains.contains(r['domain']))
                               .length,
                           itemBuilder: (context, index) {
-                            final request = trafficController.filteredRequests
+                            final request = trafficController.savedRequests
                                 .where(
                                   (r) => trafficController.blockedDomains.contains(r['domain']),
                                 )
                                 .toList()[index];
                             return RequestCardWidget(
-                              onSaveToggle: () => trafficController.toggleSaveRequest(request),
                               request: request,
                               onTap: () => _navigateToDetails(request),
+                              onSaveToggle: () => trafficController.toggleSaveRequest(request),
                             );
                           },
                         ),
                 ),
 
-                // Error requests (placeholder)
+                // Error requests (Saved)
                 Obx(
-                  () =>
-                      trafficController.filteredRequests
-                          .where((r) => r['statusCode'] >= 400)
-                          .isEmpty
-                      ? _buildEmptyState(theme)
+                  () => trafficController.savedRequests.where((r) => r['statusCode'] >= 400).isEmpty
+                      ? _buildEmptyState(theme, 'No error saved requests')
                       : ListView.builder(
-                          itemCount: trafficController.filteredRequests
+                          itemCount: trafficController.savedRequests
                               .where((r) => r['statusCode'] >= 400)
                               .length,
                           itemBuilder: (context, index) {
-                            final request = trafficController.filteredRequests
+                            final request = trafficController.savedRequests
                                 .where((r) => r['statusCode'] >= 400)
                                 .toList()[index];
                             return RequestCardWidget(
-                              onSaveToggle: () => trafficController.toggleSaveRequest(request),
-
                               request: request,
                               onTap: () => _navigateToDetails(request),
+                              onSaveToggle: () => trafficController.toggleSaveRequest(request),
                             );
                           },
                         ),
@@ -211,7 +204,7 @@ class RequestListScreen extends StatelessWidget {
   }
 
   // Build empty state
-  Widget _buildEmptyState(ThemeData theme) {
+  Widget _buildEmptyState(ThemeData theme, String message) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -223,7 +216,7 @@ class RequestListScreen extends StatelessWidget {
           ),
           SizedBox(height: 2.h),
           Text(
-            'No requests found',
+            message,
             style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
           SizedBox(height: 1.h),

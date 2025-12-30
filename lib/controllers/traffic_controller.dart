@@ -587,11 +587,7 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
       final jsonStr = await _storage.read(key: _savedRequestsKey);
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(jsonStr);
-        final loaded = decoded.cast<Map<String, dynamic>>();
-        savedRequests.assignAll(loaded);
-
-        // Add saved requests to the main list so they are displayed
-        allRequests.addAll(loaded);
+        savedRequests.assignAll(decoded.cast<Map<String, dynamic>>());
         applyFiltersAndSort();
       }
     } catch (e) {
