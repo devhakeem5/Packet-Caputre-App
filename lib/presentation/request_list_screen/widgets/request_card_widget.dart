@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:intl/intl.dart';
+import 'package:packet_capture/core/widgets/app_icon_widget.dart';
 import 'package:sizer/sizer.dart';
 
 import '../../../core/app_export.dart';
@@ -9,11 +10,13 @@ import '../../../core/app_export.dart';
 class RequestCardWidget extends StatelessWidget {
   final Map<String, dynamic> request;
   final VoidCallback onTap;
+  final VoidCallback onSaveToggle;
 
   const RequestCardWidget({
     super.key,
     required this.request,
     required this.onTap,
+    required this.onSaveToggle,
   });
 
   Color _getProtocolColor(String protocol) {
@@ -57,41 +60,35 @@ class RequestCardWidget extends StatelessWidget {
   }
 
   Widget _buildAppIcon(Map<String, dynamic> request, ThemeData theme) {
-    final appIcon = request["appIcon"];
-    final semanticLabel = request["semanticLabel"] as String? ?? 'App Icon';
-    
-    // Check if appIcon is a valid non-empty string
-    final hasValidIcon = appIcon is String && 
-                        appIcon.isNotEmpty && 
-                        appIcon != "null" &&
-                        appIcon != "false" &&
-                        appIcon != "true";
-    
-    if (hasValidIcon) {
-      try {
-        return CustomImageWidget(
-          imageUrl: appIcon,
-          width: 40,
-          height: 40,
-          fit: BoxFit.cover,
-          semanticLabel: semanticLabel,
-        );
-      } catch (e) {
-        // Fallback to icon if image loading fails
-        return Icon(
-          Icons.apps_outlined,
-          size: 40,
-          color: theme.colorScheme.onSurfaceVariant,
-        );
-      }
-    }
-    
-    // Default icon when no valid icon is available
-    return Icon(
-      Icons.apps_outlined,
-      size: 40,
-      color: theme.colorScheme.onSurfaceVariant,
-    );
+    return AppIconWidget(packageName: request['appPackage'], size: 40);
+    // final appIcon = request["appIcon"];
+    // final semanticLabel = request["semanticLabel"] as String? ?? 'App Icon';
+
+    // // Check if appIcon is a valid non-empty string
+    // final hasValidIcon =
+    //     appIcon is String &&
+    //     appIcon.isNotEmpty &&
+    //     appIcon != "null" &&
+    //     appIcon != "false" &&
+    //     appIcon != "true";
+
+    // if (hasValidIcon) {
+    //   try {
+    //     return CustomImageWidget(
+    //       imageUrl: appIcon,
+    //       width: 40,
+    //       height: 40,
+    //       fit: BoxFit.cover,
+    //       semanticLabel: semanticLabel,
+    //     );
+    //   } catch (e) {
+    //     // Fallback to icon if image loading fails
+    //     return Icon(Icons.apps_outlined, size: 40, color: theme.colorScheme.onSurfaceVariant);
+    //   }
+    // }
+
+    // // Default icon when no valid icon is available
+    // return Icon(Icons.apps_outlined, size: 40, color: theme.colorScheme.onSurfaceVariant);
   }
 
   @override
@@ -115,6 +112,13 @@ class RequestCardWidget extends StatelessWidget {
             foregroundColor: theme.colorScheme.onSecondary,
             icon: Icons.visibility,
             label: 'Details',
+          ),
+          SlidableAction(
+            onPressed: (_) => onSaveToggle(),
+            backgroundColor: theme.colorScheme.secondary,
+            foregroundColor: theme.colorScheme.onSecondary,
+            icon: Icons.bookmark_add_outlined,
+            label: 'Save',
           ),
           SlidableAction(
             onPressed: (_) {
@@ -160,9 +164,7 @@ class RequestCardWidget extends StatelessWidget {
           decoration: BoxDecoration(
             color: theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(8),
-            border: Border(
-              left: BorderSide(color: _getProtocolColor(protocol), width: 4),
-            ),
+            border: Border(left: BorderSide(color: _getProtocolColor(protocol), width: 4)),
             boxShadow: [
               BoxShadow(
                 color: theme.colorScheme.shadow.withValues(alpha: 0.1),
@@ -210,14 +212,9 @@ class RequestCardWidget extends StatelessWidget {
                     ),
                     // Method badge
                     Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 2.w,
-                        vertical: 0.5.h,
-                      ),
+                      padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.secondary.withValues(
-                          alpha: 0.1,
-                        ),
+                        color: theme.colorScheme.secondary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
@@ -234,10 +231,8 @@ class RequestCardWidget extends StatelessWidget {
 
                 // URL
                 Text(
-                  request["destinationUrl"] as String? ??'Null',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurface,
-                  ),
+                  request["domain"] as String? ?? 'Null',
+                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -248,14 +243,9 @@ class RequestCardWidget extends StatelessWidget {
                   children: [
                     // Status code
                     Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 2.w,
-                        vertical: 0.5.h,
-                      ),
+                      padding: EdgeInsets.symmetric(horizontal: 2.w, vertical: 0.5.h),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(
-                          statusCode,
-                        ).withValues(alpha: 0.1),
+                        color: _getStatusColor(statusCode).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(

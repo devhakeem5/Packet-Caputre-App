@@ -4,6 +4,7 @@ import '../presentation/activity_screen/activity_screen.dart';
 import '../presentation/analytics_dashboard_screen/analytics_dashboard_screen.dart';
 import '../presentation/app_selection_screen/app_selection_screen.dart';
 import '../presentation/main_dashboard_screen/main_dashboard_screen.dart';
+import '../presentation/main_screen/main_screen.dart';
 import '../presentation/request_details_screen/request_details_screen.dart';
 import '../presentation/request_list_screen/request_list_screen.dart';
 import '../presentation/settings_screen/settings_screen.dart';
@@ -20,7 +21,7 @@ class AppRoutes {
   static const String settings = '/settings-screen';
 
   static Map<String, WidgetBuilder> routes = {
-    initial: (context) => MainDashboardScreen(),
+    initial: (context) => MainScreen(),
     appSelection: (context) => AppSelectionScreen(),
     requestList: (context) => RequestListScreen(),
     mainDashboard: (context) => MainDashboardScreen(),

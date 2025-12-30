@@ -10,7 +10,7 @@ class NetworkRequestItemWidget extends StatelessWidget {
   final Map<String, dynamic> request;
   final VoidCallback onTap;
   final VoidCallback onBlockDomain;
-  final VoidCallback onAddToFavorites;
+  final VoidCallback onSaveRequest;
   final VoidCallback onShare;
   final VoidCallback onExport;
 
@@ -19,7 +19,7 @@ class NetworkRequestItemWidget extends StatelessWidget {
     required this.request,
     required this.onTap,
     required this.onBlockDomain,
-    required this.onAddToFavorites,
+    required this.onSaveRequest,
     required this.onShare,
     required this.onExport,
   });
@@ -90,11 +90,11 @@ class NetworkRequestItemWidget extends StatelessWidget {
             label: 'Block',
           ),
           SlidableAction(
-            onPressed: (_) => onAddToFavorites(),
-            backgroundColor: const Color(0xFFD69E2E),
-            foregroundColor: Colors.white,
-            icon: Icons.star,
-            label: 'Favorite',
+            onPressed: (_) => onSaveRequest(),
+            backgroundColor: theme.colorScheme.secondary,
+            foregroundColor: theme.colorScheme.onSecondary,
+            icon: Icons.bookmark_add_outlined,
+            label: 'Save',
           ),
         ],
       ),
@@ -128,11 +128,45 @@ class NetworkRequestItemWidget extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          request["appName"] as String? ?? 'appName',
-                          style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                request["appName"] as String? ?? 'appName',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            SizedBox(width: 2.w),
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 1.5.w, vertical: 0.2.h),
+                              decoration: BoxDecoration(
+                                color: (request["isSystemApp"] == true)
+                                    ? Colors.orange.withValues(alpha: 0.2)
+                                    : Colors.blue.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: (request["isSystemApp"] == true)
+                                      ? Colors.orange.withValues(alpha: 0.5)
+                                      : Colors.blue.withValues(alpha: 0.5),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Text(
+                                (request["isSystemApp"] == true) ? "SYS" : "USER",
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  fontSize: 8.sp,
+                                  fontWeight: FontWeight.bold,
+                                  color: (request["isSystemApp"] == true)
+                                      ? Colors.orange[800]
+                                      : Colors.blue[800],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         SizedBox(height: 0.25.h),
                         Text(

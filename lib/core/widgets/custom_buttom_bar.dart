@@ -27,20 +27,6 @@ class CustomBottomBar extends StatelessWidget {
     this.elevation = 8.0,
   });
 
-  /// Get the route path for a navigation item
-  String _getRoutePath(CustomBottomBarItem item) {
-    switch (item) {
-      case CustomBottomBarItem.dashboard:
-        return '/main-dashboard-screen';
-      case CustomBottomBarItem.apps:
-        return '/app-selection-screen';
-      case CustomBottomBarItem.requests:
-        return '/request-list-screen';
-      case CustomBottomBarItem.settings:
-        return '/request-details-screen'; // Settings/configuration screen
-    }
-  }
-
   /// Get the icon for a navigation item
   IconData _getIcon(CustomBottomBarItem item, bool isSelected) {
     switch (item) {
@@ -73,10 +59,6 @@ class CustomBottomBar extends StatelessWidget {
   void _handleItemTap(BuildContext context, CustomBottomBarItem item) {
     if (item != selectedItem) {
       onItemSelected(item);
-
-      // Navigate to the corresponding route
-      final routePath = _getRoutePath(item);
-      Navigator.pushReplacementNamed(context, routePath);
     }
   }
 

@@ -4,7 +4,6 @@ import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
 import '../../core/widgets/custom_app_bar.dart';
-import '../../core/widgets/custom_buttom_bar.dart';
 import './widgets/headers_tab_widget.dart';
 import './widgets/overview_tab_widget.dart';
 import './widgets/response_tab_widget.dart';
@@ -23,49 +22,49 @@ class RequestDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: CustomAppBar(
-        title: 'Request Details',
-        variant: CustomAppBarVariant.withBackButton,
-        actions: [
-          IconButton(
-            icon: CustomIconWidget(iconName: 'share', color: theme.colorScheme.onSurface, size: 24),
-            onPressed: handleShare,
-            tooltip: 'Share request',
-          ),
-          IconButton(
-            icon: CustomIconWidget(
-              iconName: 'more_vert',
-              color: theme.colorScheme.onSurface,
-              size: 24,
+    return DefaultTabController(
+      length: 4,
+      child: Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        appBar: CustomAppBar(
+          title: 'Request Details',
+          variant: CustomAppBarVariant.withBackButton,
+          actions: [
+            IconButton(
+              icon: CustomIconWidget(
+                iconName: 'share',
+                color: theme.colorScheme.onSurface,
+                size: 24,
+              ),
+              onPressed: handleShare,
+              tooltip: 'Share request',
             ),
-            onPressed: showMoreOptions,
-            tooltip: 'More options',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          buildRequestHeader(context),
-          buildTabBar(context),
-          Expanded(
-            child: TabBarView(
-              controller: trafficController.tabController,
-              children: [
-                OverviewTabWidget(requestData: requestData),
-                HeadersTabWidget(requestData: requestData),
-                ResponseTabWidget(requestData: requestData),
-                TimingTabWidget(requestData: requestData),
-              ],
+            IconButton(
+              icon: CustomIconWidget(
+                iconName: 'more_vert',
+                color: theme.colorScheme.onSurface,
+                size: 24,
+              ),
+              onPressed: showMoreOptions,
+              tooltip: 'More options',
             ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: Obx(
-        () => CustomBottomBar(
-          selectedItem: trafficController.selectedBottomBarItem.value,
-          onItemSelected: (item) => trafficController.selectedBottomBarItem.value = item,
+          ],
+        ),
+        body: Column(
+          children: [
+            buildRequestHeader(context),
+            buildTabBar(context),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  OverviewTabWidget(requestData: requestData),
+                  HeadersTabWidget(requestData: requestData),
+                  ResponseTabWidget(requestData: requestData),
+                  TimingTabWidget(requestData: requestData),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -179,7 +178,6 @@ class RequestDetailsScreen extends StatelessWidget {
         ),
       ),
       child: TabBar(
-        controller: trafficController.tabController,
         tabs: const [
           Tab(text: 'Overview'),
           Tab(text: 'Headers'),

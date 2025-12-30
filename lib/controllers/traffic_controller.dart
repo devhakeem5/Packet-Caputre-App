@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -38,12 +39,16 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
   RxBool hideSystemApps = false.obs; // New: Hide system apps filter
   RxBool hideEncryptedTraffic = false.obs; // New: Encrypted traffic filter
 
+  // Saved Requests (Persistent)
+  RxList<Map<String, dynamic>> savedRequests = <Map<String, dynamic>>[].obs;
+  final _storage = const FlutterSecureStorage();
+  static const _savedRequestsKey = 'saved_requests_secure';
+
   // Tab controllers
-  late TabController tabController;
   late TabController requestListTabController;
 
   // Bottom bar selection
-  Rx<CustomBottomBarItem> selectedBottomBarItem = CustomBottomBarItem.requests.obs;
+  Rx<CustomBottomBarItem> selectedBottomBarItem = CustomBottomBarItem.dashboard.obs;
 
   // Event Channel
   static const eventChannel = EventChannel('com.example.packet_capture/events');
@@ -55,10 +60,10 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
   void onInit() {
     super.onInit();
     requestListTabController = TabController(length: 4, vsync: this);
-    tabController = TabController(length: 4, vsync: this);
 
     _loadPersistentFilters();
-    _loadRequestHistory(); // Load saved requests
+    _loadSavedRequests(); // Load securely saved requests
+    // _loadRequestHistory(); // Disabled: Only loading explicitly saved requests now
 
     // Load selected apps from CaptureController
     try {
@@ -308,7 +313,6 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
 
   @override
   void onClose() {
-    tabController.dispose();
     requestListTabController.dispose();
     super.onClose();
   }
@@ -574,5 +578,55 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
 
   double _parseTime(String time) {
     return double.tryParse(time.replaceAll(' ms', '')) ?? 0;
+  }
+
+  // --- Saved Requests (Secure Storage) ---
+
+  Future<void> _loadSavedRequests() async {
+    try {
+      final jsonStr = await _storage.read(key: _savedRequestsKey);
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(jsonStr);
+        final loaded = decoded.cast<Map<String, dynamic>>();
+        savedRequests.assignAll(loaded);
+
+        // Add saved requests to the main list so they are displayed
+        allRequests.addAll(loaded);
+        applyFiltersAndSort();
+      }
+    } catch (e) {
+      print("Error loading saved requests: $e");
+    }
+  }
+
+  Future<void> _persistSavedRequests() async {
+    try {
+      final jsonStr = jsonEncode(savedRequests);
+      await _storage.write(key: _savedRequestsKey, value: jsonStr);
+    } catch (e) {
+      print("Error saving requests to secure storage: $e");
+    }
+  }
+
+  void toggleSaveRequest(Map<String, dynamic> request) {
+    // Check if already saved (by ID)
+    final index = savedRequests.indexWhere((r) => r['id'] == request['id']);
+    if (index >= 0) {
+      // Already saved, so remove it
+      savedRequests.removeAt(index);
+      Get.snackbar('Removed', 'Request removed from Saved', duration: Duration(seconds: 1));
+    } else {
+      // Not saved, add it
+      // Create a copy to ensure strictly encodable data
+      final cleanRequest = Map<String, dynamic>.from(request);
+      savedRequests.add(cleanRequest);
+      Get.snackbar('Saved', 'Request saved securely', duration: Duration(seconds: 1));
+    }
+    _persistSavedRequests();
+    applyFiltersAndSort(); // Re-apply to update UI if needed
+  }
+
+  bool isRequestSaved(Map<String, dynamic> request) {
+    return savedRequests.any((r) => r['id'] == request['id']);
   }
 }

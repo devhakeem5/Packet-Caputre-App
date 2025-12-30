@@ -6,7 +6,6 @@ import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
 import '../../core/widgets/custom_app_bar.dart';
-import '../../core/widgets/custom_buttom_bar.dart';
 import './widgets/app_list_item_widget.dart';
 import './widgets/search_bar_widget.dart';
 import './widgets/section_header_widget.dart';
@@ -140,7 +139,7 @@ class AppSelectionScreen extends StatelessWidget {
   void handleDone() {
     // Save selection to persistent storage via CaptureController
     captureController.updateSelectedApps(selectedApps);
-    
+
     // Update TrafficController filters
     final TrafficController trafficController = Get.find<TrafficController>();
     trafficController.selectedApps.assignAll(selectedApps);
@@ -243,31 +242,30 @@ class AppSelectionScreen extends StatelessWidget {
 
           // App list
           Expanded(
-            child: Obx(
-              () {
-                if (isRefreshing.value && _installedApps.isEmpty) {
-                  // Show loading indicator while fetching apps
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 2.h),
-                        Text(
-                          'Loading apps...',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
+            child: Obx(() {
+              if (isRefreshing.value && _installedApps.isEmpty) {
+                // Show loading indicator while fetching apps
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 2.h),
+                      Text(
+                        'Loading apps...',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
-                      ],
-                    ),
-                  );
-                }
-                return RefreshIndicator(
-                  onRefresh: handleRefresh,
-                  child: filteredApps.isEmpty
-                      ? _buildEmptyState(context)
-                      : ListView(
+                      ),
+                    ],
+                  ),
+                );
+              }
+              return RefreshIndicator(
+                onRefresh: handleRefresh,
+                child: filteredApps.isEmpty
+                    ? _buildEmptyState(context)
+                    : ListView(
                         padding: EdgeInsets.symmetric(vertical: 1.h),
                         children: [
                           // System Apps Section
@@ -308,20 +306,13 @@ class AppSelectionScreen extends StatelessWidget {
                               ),
                           ],
 
-                          SizedBox(height: 2.h                              ),
+                          SizedBox(height: 2.h),
                         ],
                       ),
-                    );
-              },
-            ),
+              );
+            }),
           ),
         ],
-      ),
-      bottomNavigationBar: CustomBottomBar(
-        selectedItem: CustomBottomBarItem.apps,
-        onItemSelected: (item) {
-          // Handle navigation through bottom bar
-        },
       ),
     );
   }

@@ -4,7 +4,6 @@ import 'package:sizer/sizer.dart';
 
 import '../../core/app_export.dart';
 import '../../core/widgets/custom_app_bar.dart';
-import '../../core/widgets/custom_buttom_bar.dart';
 import './widgets/active_filter_bar_widget.dart';
 import './widgets/app_filter_widget.dart';
 import './widgets/domain_blocklist_widget.dart';
@@ -123,6 +122,7 @@ class RequestListScreen extends StatelessWidget {
                             return RequestCardWidget(
                               request: request,
                               onTap: () => _navigateToDetails(request),
+                              onSaveToggle: () => trafficController.toggleSaveRequest(request),
                             );
                           },
                         ),
@@ -144,6 +144,7 @@ class RequestListScreen extends StatelessWidget {
                                 .where((r) => r['statusCode'] == 200)
                                 .toList()[index];
                             return RequestCardWidget(
+                              onSaveToggle: () => trafficController.toggleSaveRequest(request),
                               request: request,
                               onTap: () => _navigateToDetails(request),
                             );
@@ -169,6 +170,7 @@ class RequestListScreen extends StatelessWidget {
                                 )
                                 .toList()[index];
                             return RequestCardWidget(
+                              onSaveToggle: () => trafficController.toggleSaveRequest(request),
                               request: request,
                               onTap: () => _navigateToDetails(request),
                             );
@@ -192,6 +194,8 @@ class RequestListScreen extends StatelessWidget {
                                 .where((r) => r['statusCode'] >= 400)
                                 .toList()[index];
                             return RequestCardWidget(
+                              onSaveToggle: () => trafficController.toggleSaveRequest(request),
+
                               request: request,
                               onTap: () => _navigateToDetails(request),
                             );
@@ -202,12 +206,6 @@ class RequestListScreen extends StatelessWidget {
             ),
           ),
         ],
-      ),
-      bottomNavigationBar: CustomBottomBar(
-        selectedItem: CustomBottomBarItem.requests,
-        onItemSelected: (item) {
-          // Handle navigation through bottom bar
-        },
       ),
     );
   }

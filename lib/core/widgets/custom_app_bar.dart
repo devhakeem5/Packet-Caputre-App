@@ -143,19 +143,14 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget _buildTitle(BuildContext context) {
     final theme = Theme.of(context);
     final textColor =
-        foregroundColor ??
-        theme.appBarTheme.foregroundColor ??
-        theme.colorScheme.onSurface;
+        foregroundColor ?? theme.appBarTheme.foregroundColor ?? theme.colorScheme.onSurface;
 
     if (variant == CustomAppBarVariant.withStatus && monitoringStatus != null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            title,
-            style: theme.appBarTheme.titleTextStyle?.copyWith(color: textColor),
-          ),
+          Text(title, style: theme.appBarTheme.titleTextStyle?.copyWith(color: textColor)),
           const SizedBox(height: 2),
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -187,25 +182,17 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            title,
-            style: theme.appBarTheme.titleTextStyle?.copyWith(color: textColor),
-          ),
+          Text(title, style: theme.appBarTheme.titleTextStyle?.copyWith(color: textColor)),
           const SizedBox(height: 2),
           Text(
             subtitle!,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: textColor.withValues(alpha: 0.7),
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: textColor.withValues(alpha: 0.7)),
           ),
         ],
       );
     }
 
-    return Text(
-      title,
-      style: theme.appBarTheme.titleTextStyle?.copyWith(color: textColor),
-    );
+    return Text(title, style: theme.appBarTheme.titleTextStyle?.copyWith(color: textColor));
   }
 
   /// Build search bar for search variant
@@ -238,10 +225,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                 )
               : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
-          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
         style: theme.textTheme.bodyMedium,
       ),
@@ -252,14 +236,8 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final appBarColor =
-        backgroundColor ??
-        theme.appBarTheme.backgroundColor ??
-        colorScheme.surface;
-    final textColor =
-        foregroundColor ??
-        theme.appBarTheme.foregroundColor ??
-        colorScheme.onSurface;
+    final appBarColor = backgroundColor ?? theme.appBarTheme.backgroundColor ?? colorScheme.surface;
+    final textColor = foregroundColor ?? theme.appBarTheme.foregroundColor ?? colorScheme.onSurface;
 
     // Set system UI overlay style for status bar
     SystemChrome.setSystemUIOverlayStyle(
@@ -276,7 +254,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         backgroundColor: appBarColor,
         foregroundColor: textColor,
         elevation: showElevation ? elevation : 0,
-        leading: _buildLeading(context),
+        // leading: _buildLeading(context),
         title: isSearchFocused ? null : _buildTitle(context),
         actions: isSearchFocused ? null : actions,
         bottom: PreferredSize(
@@ -290,7 +268,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       backgroundColor: appBarColor,
       foregroundColor: textColor,
       elevation: showElevation ? elevation : 0,
-      leading: _buildLeading(context),
+      // leading: _buildLeading(context),
       title: _buildTitle(context),
       actions: actions,
       centerTitle: variant == CustomAppBarVariant.minimal,

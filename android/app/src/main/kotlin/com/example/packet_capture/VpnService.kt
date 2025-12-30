@@ -94,6 +94,7 @@ class VpnService : VpnService() {
             builder.addAddress("10.0.0.2", 24)
             builder.addRoute("0.0.0.0", 0)
             builder.setMtu(1280)
+            builder.addDnsServer("8.8.8.8")
             
             // DO NOT use addAllowedApplication() - it restricts traffic and breaks connectivity
             // Instead, we'll capture ALL traffic and filter in Flutter based on selected apps
@@ -261,12 +262,8 @@ class VpnService : VpnService() {
             return
         }
         
-        // Block UDP 443/80 to force QUIC fallback to TCP (HTTP/1.1 or HTTP/2)
-        // This ensures traffic goes through the Proxy and is decrypted/captured.
-        if (destPort == 443 || destPort == 80) {
-             // Log.d(TAG, "Blocking UDP traffic on port $destPort to force TCP/HTTP fallback (QUIC blocking)")
-             return
-        }
+        // UDP Blocking removed to allow connectivity. 
+        // QUIC traffic will be passed through as UDP (encrypted).
 
         meta["srcPort"] = srcPort
         meta["destPort"] = destPort

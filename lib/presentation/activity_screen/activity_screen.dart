@@ -103,6 +103,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                     return RequestCardWidget(
                       request: request,
                       onTap: () => _navigateToDetails(request),
+                      onSaveToggle: () => trafficController.toggleSaveRequest(request),
                     );
                   },
                 ),

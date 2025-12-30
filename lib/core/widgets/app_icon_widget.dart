@@ -6,7 +6,7 @@ class AppIconWidget extends StatefulWidget {
   final String? packageName;
   final double size;
 
-  const AppIconWidget({Key? key, required this.packageName, this.size = 40}) : super(key: key);
+  const AppIconWidget({super.key, required this.packageName, this.size = 40});
 
   @override
   State<AppIconWidget> createState() => _AppIconWidgetState();

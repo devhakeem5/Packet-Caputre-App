@@ -11,7 +11,7 @@ class NetworkStatisticsWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final peakHours = statisticsData['peakHours'] as List<Map<String, dynamic>>;
+    final peakHours = statisticsData['peakHours'] as List;
 
     return Container(
       padding: EdgeInsets.all(4.w),
@@ -80,7 +80,7 @@ class NetworkStatisticsWidget extends StatelessWidget {
 
   Widget _buildPeakHoursGrid(
     BuildContext context,
-    List<Map<String, dynamic>> peakHours,
+    List peakHours,
   ) {
     final theme = Theme.of(context);
     final maxRequests = peakHours.fold<int>(

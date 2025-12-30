@@ -6,7 +6,6 @@ import 'package:sizer/sizer.dart';
 import '../../controllers/traffic_controller.dart';
 import '../../core/app_export.dart';
 import '../../core/widgets/custom_app_bar.dart';
-import '../../core/widgets/custom_buttom_bar.dart';
 
 /// Settings Screen - Configure app behavior and filters
 class SettingsScreen extends StatelessWidget {
@@ -117,12 +116,6 @@ class SettingsScreen extends StatelessWidget {
             },
           ),
         ],
-      ),
-      bottomNavigationBar: Obx(
-        () => CustomBottomBar(
-          selectedItem: trafficController.selectedBottomBarItem.value,
-          onItemSelected: (item) => trafficController.selectedBottomBarItem.value = item,
-        ),
       ),
     );
   }
