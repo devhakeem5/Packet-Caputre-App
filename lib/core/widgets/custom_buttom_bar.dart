@@ -35,7 +35,7 @@ class CustomBottomBar extends StatelessWidget {
       case CustomBottomBarItem.apps:
         return isSelected ? Icons.apps : Icons.apps_outlined;
       case CustomBottomBarItem.requests:
-        return isSelected ? Icons.list_alt : Icons.list_alt_outlined;
+        return isSelected ? Icons.bookmark : Icons.bookmark_border;
       case CustomBottomBarItem.settings:
         return isSelected ? Icons.settings : Icons.settings_outlined;
     }
@@ -49,7 +49,7 @@ class CustomBottomBar extends StatelessWidget {
       case CustomBottomBarItem.apps:
         return 'Apps';
       case CustomBottomBarItem.requests:
-        return 'Activity';
+        return 'Saved';
       case CustomBottomBarItem.settings:
         return 'Settings';
     }

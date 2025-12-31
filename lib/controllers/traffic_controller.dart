@@ -587,18 +587,35 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
       final jsonStr = await _storage.read(key: _savedRequestsKey);
       if (jsonStr != null && jsonStr.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(jsonStr);
-        savedRequests.assignAll(decoded.cast<Map<String, dynamic>>());
-        applyFiltersAndSort();
+        final List<Map<String, dynamic>> requests = decoded.cast<Map<String, dynamic>>().map((req) {
+          // Convert timestamp string back to DateTime
+          if (req['timestamp'] is String) {
+            req['timestamp'] = DateTime.parse(req['timestamp']);
+          }
+          return req;
+        }).toList();
+        savedRequests.assignAll(requests);
+        print('Loaded ${savedRequests.length} saved requests from secure storage');
       }
     } catch (e) {
       print("Error loading saved requests: $e");
     }
   }
 
-  Future<void> _persistSavedRequests() async {
+  Future<void> persistSavedRequests() async {
     try {
-      final jsonStr = jsonEncode(savedRequests);
+      // Convert DateTime to ISO string for JSON serialization
+      final List<Map<String, dynamic>> serializable = savedRequests.map((req) {
+        final copy = Map<String, dynamic>.from(req);
+        if (copy['timestamp'] is DateTime) {
+          copy['timestamp'] = (copy['timestamp'] as DateTime).toIso8601String();
+        }
+        return copy;
+      }).toList();
+
+      final jsonStr = jsonEncode(serializable);
       await _storage.write(key: _savedRequestsKey, value: jsonStr);
+      print('Persisted ${savedRequests.length} requests to secure storage');
     } catch (e) {
       print("Error saving requests to secure storage: $e");
     }
@@ -618,7 +635,7 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
       savedRequests.add(cleanRequest);
       Get.snackbar('Saved', 'Request saved securely', duration: Duration(seconds: 1));
     }
-    _persistSavedRequests();
+    persistSavedRequests();
     applyFiltersAndSort(); // Re-apply to update UI if needed
   }
 

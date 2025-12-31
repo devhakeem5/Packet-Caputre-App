@@ -70,24 +70,36 @@ class PermissionDescriptions {
       icon: Icons.image,
     ),
     'android.permission.READ_MEDIA_VIDEO': PermissionDetail(
-      nameEn: 'Read Video',
-      nameAr: 'قراءة الفيديو',
-      description: 'يسمح للتطبيق بالوصول إلى ملفات الفيديو المخزنة على جهازك.',
-      icon: Icons.videocam,
+      nameEn: 'Read Media Video',
+      nameAr: 'قراءة الفيديوهات',
+      description: 'يسمح بالوصول إلى الفيديوهات من مكتبة الوسائط (Android 13+)',
+      icon: Icons.video_library,
     ),
     'android.permission.READ_MEDIA_AUDIO': PermissionDetail(
-      nameEn: 'Read Audio',
-      nameAr: 'قراءة الصوت',
-      description: 'يسمح للتطبيق بالوصول إلى الملفات الصوتية المخزنة على جهازك.',
+      nameEn: 'Read Media Audio',
+      nameAr: 'قراءة الملفات الصوتية',
+      description: 'يسمح بالوصول إلى الملفات الصوتية من مكتبة الوسائط (Android 13+)',
       icon: Icons.audiotrack,
+    ),
+    'android.permission.ACCESS_MEDIA_LOCATION': PermissionDetail(
+      nameEn: 'Access Media Location',
+      nameAr: 'الوصول لموقع الوسائط',
+      description: 'يسمح بقراءة بيانات الموقع المضمنة في الصور والفيديوهات',
+      icon: Icons.location_on,
     ),
 
     // MICROPHONE
     'android.permission.RECORD_AUDIO': PermissionDetail(
-      nameEn: 'Microphone',
-      nameAr: 'الميكروفون',
-      description: 'يسمح للتطبيق بتسجيل الصوت باستخدام الميكروفون.',
+      nameEn: 'Record Audio',
+      nameAr: 'تسجيل الصوت',
+      description: 'يسمح بتسجيل الصوت باستخدام الميكروفون',
       icon: Icons.mic,
+    ),
+    'android.permission.CAPTURE_AUDIO_OUTPUT': PermissionDetail(
+      nameEn: 'Capture Audio Output',
+      nameAr: 'التقاط مخرجات الصوت',
+      description: 'يسمح بالتقاط الصوت المُشغَّل من التطبيقات الأخرى',
+      icon: Icons.speaker,
     ),
 
     // CONTACTS
@@ -105,17 +117,35 @@ class PermissionDescriptions {
     ),
     'android.permission.GET_ACCOUNTS': PermissionDetail(
       nameEn: 'Get Accounts',
-      nameAr: 'الوصول للحسابات',
-      description: 'يسمح للتطبيق بمعرفة الحسابات المسجلة على الجهاز (مثل Google, WhatsApp).',
-      icon: Icons.account_box,
+      nameAr: 'الحصول على الحسابات',
+      description: 'يسمح بالوصول إلى قائمة الحسابات في خدمة الحسابات',
+      icon: Icons.account_circle,
+    ),
+    'android.permission.MANAGE_ACCOUNTS': PermissionDetail(
+      nameEn: 'Manage Accounts',
+      nameAr: 'إدارة الحسابات',
+      description: 'يسمح بإضافة وإزالة الحسابات وحذف كلمات المرور',
+      icon: Icons.manage_accounts,
+    ),
+    'android.permission.AUTHENTICATE_ACCOUNTS': PermissionDetail(
+      nameEn: 'Authenticate Accounts',
+      nameAr: 'مصادقة الحسابات',
+      description: 'يسمح بالعمل كمصادق حسابات في مدير الحسابات',
+      icon: Icons.verified_user,
+    ),
+    'android.permission.USE_CREDENTIALS': PermissionDetail(
+      nameEn: 'Use Credentials',
+      nameAr: 'استخدام بيانات الاعتماد',
+      description: 'يسمح باستخدام رموز المصادقة الخاصة بالحسابات',
+      icon: Icons.vpn_key,
     ),
 
     // PHONE & CALLS
     'android.permission.READ_PHONE_STATE': PermissionDetail(
       nameEn: 'Read Phone State',
       nameAr: 'قراءة حالة الهاتف',
-      description: 'يسمح للتطبيق بمعرفة رقم الهاتف وحالة الشبكة ومعرف الجهاز (IMEI).',
-      icon: Icons.phone_android,
+      description: 'يسمح بالوصول لحالة الهاتف ومعلومات الشبكة',
+      icon: Icons.phone_in_talk,
     ),
     'android.permission.CALL_PHONE': PermissionDetail(
       nameEn: 'Call Phone',
@@ -138,8 +168,8 @@ class PermissionDescriptions {
     'android.permission.ANSWER_PHONE_CALLS': PermissionDetail(
       nameEn: 'Answer Phone Calls',
       nameAr: 'الرد على المكالمات',
-      description: 'يسمح للتطبيق بالرد على المكالمات الهاتفية الواردة.',
-      icon: Icons.call_received,
+      description: 'يسمح للتطبيق بالرد على المكالمات الواردة',
+      icon: Icons.call,
     ),
     'android.permission.USE_SIP': PermissionDetail(
       nameEn: 'Use SIP',
@@ -152,6 +182,24 @@ class PermissionDescriptions {
       nameAr: 'معالجة المكالمات الصادرة',
       description: 'يسمح ولا يتتطبيق برؤية الرقم الذي تتصل به وتعديله أو قطع الاتصال.',
       icon: Icons.phone_forwarded,
+    ),
+    'android.permission.READ_PHONE_NUMBERS': PermissionDetail(
+      nameEn: 'Read Phone Numbers',
+      nameAr: 'قراءة أرقام الهاتف',
+      description: 'يسمح بقراءة أرقام الهاتف من الجهاز',
+      icon: Icons.phone_android,
+    ),
+    'android.permission.ACCEPT_HANDOVER': PermissionDetail(
+      nameEn: 'Accept Handover',
+      nameAr: 'قبول نقل المكالمة',
+      description: 'يسمح بمتابعة المكالمات التي بدأت في تطبيق آخر',
+      icon: Icons.phonelink_ring,
+    ),
+    'android.permission.READ_PRIVILEGED_PHONE_STATE': PermissionDetail(
+      nameEn: 'Read Privileged Phone State',
+      nameAr: 'قراءة حالة الهاتف المتقدمة',
+      description: 'يسمح بقراءة معلومات حالة الهاتف المتقدمة',
+      icon: Icons.security,
     ),
 
     // SMS
@@ -190,14 +238,14 @@ class PermissionDescriptions {
     'android.permission.READ_CALENDAR': PermissionDetail(
       nameEn: 'Read Calendar',
       nameAr: 'قراءة التقويم',
-      description: 'يسمح للتطبيق بالاطلاع على الأحداث والمواعيد في تقويمك.',
+      description: 'يسمح بقراءة أحداث التقويم والمواعيد',
       icon: Icons.calendar_today,
     ),
     'android.permission.WRITE_CALENDAR': PermissionDetail(
       nameEn: 'Write Calendar',
-      nameAr: 'تعديل التقويم',
-      description: 'يسمح للتطبيق بإضافة أو تعديل الأحداث في تقويمك.',
-      icon: Icons.edit_calendar,
+      nameAr: 'الكتابة على التقويم',
+      description: 'يسمح بإضافة وتعديل أحداث التقويم',
+      icon: Icons.event,
     ),
 
     // NETWORK & WIFI
@@ -214,22 +262,34 @@ class PermissionDescriptions {
       icon: Icons.network_check,
     ),
     'android.permission.ACCESS_WIFI_STATE': PermissionDetail(
-      nameEn: 'WiFi State',
-      nameAr: 'حالة الواي فاي',
-      description: 'يسمح للتطبيق بمعرفة معلومات حول شبكة الواي فاي المتصل بها.',
-      icon: Icons.wifi,
+      nameEn: 'Access WiFi State',
+      nameAr: 'الوصول لحالة الواي فاي',
+      description: 'يسمح بمعرفة معلومات عن شبكات الواي فاي',
+      icon: Icons.wifi_find,
     ),
     'android.permission.CHANGE_WIFI_STATE': PermissionDetail(
       nameEn: 'Change WiFi State',
       nameAr: 'تغيير حالة الواي فاي',
-      description: 'يسمح للتطبيق بتشغيل أو إيقاف الواي فاي والاتصال بنقاط الوصول.',
-      icon: Icons.wifi_tethering,
+      description: 'يسمح بتشغيل/إيقاف الواي فاي والاتصال بالشبكات',
+      icon: Icons.wifi,
     ),
     'android.permission.CHANGE_NETWORK_STATE': PermissionDetail(
       nameEn: 'Change Network State',
       nameAr: 'تغيير حالة الشبكة',
-      description: 'يسمح للتطبيق بتغيير حالة الاتصال بالشبكة.',
-      icon: Icons.settings_ethernet,
+      description: 'يسمح بتفعيل/تعطيل اتصالات الشبكة',
+      icon: Icons.network_check,
+    ),
+    'android.permission.CHANGE_WIFI_MULTICAST_STATE': PermissionDetail(
+      nameEn: 'WiFi Multicast',
+      nameAr: 'بث متعدد للواي فاي',
+      description: 'يسمح بتلقي حزم البث المتعدد عبر الواي فاي',
+      icon: Icons.wifi_tethering,
+    ),
+    'android.permission.NEARBY_WIFI_DEVICES': PermissionDetail(
+      nameEn: 'Nearby WiFi Devices',
+      nameAr: 'أجهزة الواي فاي القريبة',
+      description: 'يسمح باكتشاف أجهزة الواي فاي القريبة (Android 13+)',
+      icon: Icons.devices,
     ),
 
     // BLUETOOTH
@@ -242,8 +302,8 @@ class PermissionDescriptions {
     'android.permission.BLUETOOTH_ADMIN': PermissionDetail(
       nameEn: 'Bluetooth Admin',
       nameAr: 'إدارة البلوتوث',
-      description: 'يسمح للتطبيق بالبحث عن الأجهزة والاقتران بها وتعديل الإعدادات.',
-      icon: Icons.bluetooth_searching,
+      description: 'يسمح بإعداد البلوتوث وإقران الأجهزة',
+      icon: Icons.bluetooth_connected,
     ),
     'android.permission.BLUETOOTH_CONNECT': PermissionDetail(
       nameEn: 'Bluetooth Connect',
@@ -262,6 +322,12 @@ class PermissionDescriptions {
       nameAr: 'بث بلوتوث',
       description: 'يسمح للتطبيق بجعل جهازك مرئياً لأجهزة البلوتوث الأخرى (Android 12+).',
       icon: Icons.bluetooth_audio,
+    ),
+    'android.permission.BLUETOOTH_PRIVILEGED': PermissionDetail(
+      nameEn: 'Bluetooth Privileged',
+      nameAr: 'بلوتوث متقدم',
+      description: 'يسمح بعمليات بلوتوث متقدمة دون موافقة المستخدم',
+      icon: Icons.bluetooth,
     ),
 
     // SENSORS & PHYSICAL ACTIVITY
@@ -370,18 +436,6 @@ class PermissionDescriptions {
       description: 'يسمح للتطبيق بتفعيل أو تعطيل المزامنة للحسابات.',
       icon: Icons.sync_problem,
     ),
-    'android.permission.AUTHENTICATE_ACCOUNTS': PermissionDetail(
-      nameEn: 'Authenticate Accounts',
-      nameAr: 'توثيق الحسابات',
-      description: 'يسمح للتطبيق بالقيام بدور موثق الحسابات وإدارة الحسابات.',
-      icon: Icons.verified,
-    ),
-    'android.permission.MANAGE_ACCOUNTS': PermissionDetail(
-      nameEn: 'Manage Accounts',
-      nameAr: 'إدارة الحسابات',
-      description: 'يسمح للتطبيق بإضافة أو إزالة الحسابات من النظام.',
-      icon: Icons.manage_accounts,
-    ),
   };
 
   static PermissionDetail? get(String name) {
@@ -404,7 +458,7 @@ class PermissionDescriptions {
       nameEn: simplifiedName,
       nameAr: simplifiedName, // Fallback to English name if no Arabic translation
       description:
-          'هذا الإذن يسمح للتطبيق بالقيام بعملية: $simplifiedName. (لا يوجد وصف تفصيلي متوفر لهذا الإذن حالياً).',
+          'الإذن: $simplifiedName. (لا يوجد وصف تفصيلي متوفر لهذا الإذن حالياً).',
       icon: Icons.security,
     );
   }

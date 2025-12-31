@@ -175,9 +175,7 @@ class _AppPermissionsScreenState extends State<AppPermissionsScreen> {
                             color: theme.colorScheme.secondary.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: iconBytes != null
-                              ? Image.memory(iconBytes, width: 24, height: 24)
-                              : Icon(iconData, color: theme.colorScheme.secondary, size: 24),
+                          child: Icon(iconData, color: theme.colorScheme.secondary, size: 24),
                         ),
                         title: Text(
                           label,

@@ -418,14 +418,20 @@ class AppSelectionScreen extends StatelessWidget {
                   child: OutlinedButton.icon(
                     onPressed: () {
                       Navigator.pop(context);
-                      Navigator.pushNamed(context, '/request-list-screen');
+                      Get.to(
+                        () => AppPermissionsScreen(
+                          packageName: app["packageName"],
+                          appName: app["name"],
+                          appIconBytes: app["iconBytes"],
+                        ),
+                      );
                     },
                     icon: CustomIconWidget(
-                      iconName: 'list_alt',
+                      iconName: 'security',
                       size: 20,
                       color: theme.colorScheme.secondary,
                     ),
-                    label: Text('View Requests'),
+                    label: Text('Permissions'),
                   ),
                 ),
                 SizedBox(width: 3.w),

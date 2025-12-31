@@ -54,6 +54,19 @@ class SettingsScreen extends StatelessWidget {
           Obx(
             () => _buildSwitchTile(
               context,
+              title: 'إخفاء تطبيقات النظام',
+              subtitle: 'Hide network traffic from system applications',
+              value: trafficController.hideSystemApps.value,
+              onChanged: (value) {
+                trafficController.toggleHideSystemApps();
+              },
+              icon: Icons.system_update_outlined,
+            ),
+          ),
+
+          Obx(
+            () => _buildSwitchTile(
+              context,
               title: 'Enable HTTP Filtering',
               subtitle: 'Show HTTP (port 80) requests',
               value: trafficController.httpEnabled.value,
