@@ -106,24 +106,51 @@ class SimpleHttpProxy(private val port: Int) {
             
             Log.d(TAG, "CONNECT tunnel established to $host:$port")
             
-            // Emit metadata event
-            emitTunnelEvent(host, port)
+            // PEEK at the first bytes from client to detect Plaintext vs TLS
+            val bufferedClientIn = BufferedInputStream(client.getInputStream())
+            bufferedClientIn.mark(10)
+            val firstBytes = ByteArray(10)
+            val read = bufferedClientIn.read(firstBytes)
+            bufferedClientIn.reset() // Reset so copyTo reads from start
             
-            // Bidirectional tunnel (no decryption)
-            val clientToRemote = thread(start = true) {
-                try {
-                    client.getInputStream().copyTo(remote.getOutputStream())
-                } catch (e: Exception) {}
+            val isPlaintext = if (read > 0) {
+                 val header = String(firstBytes, 0, read)
+                 header.startsWith("GET ") || header.startsWith("POST ") || 
+                 header.startsWith("PUT ") || header.startsWith("DELETE ")
+            } else false
+            
+            if (isPlaintext) {
+                Log.d(TAG, "Detected PLAINTEXT HTTP inside CONNECT tunnel to $host:$port")
+                // Parse as HTTP Request
+                handleHttpRequest(
+                    client,
+                    BufferedReader(InputStreamReader(bufferedClientIn)), // Use the buffered stream
+                    output,
+                    "HTTPS", // Mark as HTTPS protocol for UI purposes (tunneled)
+                    hostPort, // Use original host:port
+                    "CONNECT $hostPort HTTP/1.1" // Fake request line
+                )
+            } else {
+                Log.d(TAG, "Detected BINARY/TLS inside CONNECT tunnel to $host:$port")
+                // Emit metadata event
+                emitTunnelEvent(host, port)
+                
+                // Bidirectional tunnel (no decryption)
+                val clientToRemote = thread(start = true) {
+                    try {
+                        bufferedClientIn.copyTo(remote.getOutputStream())
+                    } catch (e: Exception) {}
+                }
+                
+                val remoteToClient = thread(start = true) {
+                    try {
+                        remote.getInputStream().copyTo(output)
+                    } catch (e: Exception) {}
+                }
+                
+                clientToRemote.join()
+                remoteToClient.join()
             }
-            
-            val remoteToClient = thread(start = true) {
-                try {
-                    remote.getInputStream().copyTo(output)
-                } catch (e: Exception) {}
-            }
-            
-            clientToRemote.join()
-            remoteToClient.join()
             
             remote.close()
         } catch (e: Exception) {
@@ -145,6 +172,7 @@ class SimpleHttpProxy(private val port: Int) {
             var host = ""
             var contentLength = 0
             
+            // Read headers (Case Insensitive)
             while (true) {
                 val line = input.readLine()
                 if (line.isNullOrEmpty()) break
@@ -153,7 +181,7 @@ class SimpleHttpProxy(private val port: Int) {
                 if (colonIndex > 0) {
                     val key = line.substring(0, colonIndex).trim()
                     val value = line.substring(colonIndex + 1).trim()
-                    headers[key] = value
+                    headers[key] = value // Original casing for storage
                     
                     if (key.equals("Host", ignoreCase = true)) {
                         host = value
@@ -167,8 +195,13 @@ class SimpleHttpProxy(private val port: Int) {
             // Read body if present
             val body = if (contentLength > 0) {
                 val bodyChars = CharArray(contentLength)
-                input.read(bodyChars, 0, contentLength)
-                String(bodyChars)
+                var totalRead = 0
+                while (totalRead < contentLength) {
+                    val read = input.read(bodyChars, totalRead, contentLength - totalRead)
+                    if (read == -1) break
+                    totalRead += read
+                }
+                String(bodyChars, 0, totalRead)
             } else ""
             
             Log.d(TAG, "HTTP Request: $method $uri (Host: $host, Body: ${body.length} bytes)")

@@ -117,6 +117,12 @@ class VpnService : VpnService() {
             val dnsServers = getSystemDnsServers()
             dnsServers.forEach { builder.addDnsServer(it) }
 
+            // CRITICAL: Set System HTTP Proxy to force apps to use our local proxy
+            // This ensures we capture full HTTP content even for apps that might otherwise bypass us
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                builder.setHttpProxy(android.net.ProxyInfo.buildDirectProxy("127.0.0.1", HTTP_PROXY_PORT))
+            }
+
             vpnInterface = builder.establish()
             isRunning = true
             selector = Selector.open()
