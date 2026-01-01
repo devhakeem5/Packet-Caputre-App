@@ -148,7 +148,15 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
       final prefs = await SharedPreferences.getInstance();
 
       // Save only last 100 requests to avoid growing storage
-      final requestsToSave = allRequests.take(100).toList();
+      // Convert DateTime to string for JSON serialization
+      final requestsToSave = allRequests.take(100).map((req) {
+        final copy = Map<String, dynamic>.from(req);
+        if (copy['timestamp'] is DateTime) {
+          copy['timestamp'] = (copy['timestamp'] as DateTime).toIso8601String();
+        }
+        return copy;
+      }).toList();
+
       final encoded = jsonEncode(requestsToSave);
 
       await prefs.setString('request_history', encoded);

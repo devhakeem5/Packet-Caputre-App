@@ -37,7 +37,9 @@ class VpnService : VpnService() {
     private val connectionData =
             ConcurrentHashMap<String, ConnectionTracker>() // Connection key -> Tracker
 
-    // Proxy Server - REMOVED (Pure TCP Only)
+    // Optional HTTP Proxy (for cooperative apps)
+    private var httpProxy: SimpleHttpProxy? = null
+    private val HTTP_PROXY_PORT = 8888
 
     private class TcpSession(
             val channel: SocketChannel,
@@ -121,7 +123,14 @@ class VpnService : VpnService() {
 
             startTrafficLoop()
 
-            // Proxy removed - Pure TCP only
+            // Start Optional HTTP Proxy
+            try {
+                httpProxy = SimpleHttpProxy(HTTP_PROXY_PORT)
+                httpProxy?.start()
+                Log.d(TAG, "HTTP Proxy started on 127.0.0.1:$HTTP_PROXY_PORT")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to start HTTP proxy (non-critical)", e)
+            }
 
             Log.d(TAG, "VPN Started - Monitoring all traffic")
         } catch (e: Exception) {
@@ -148,7 +157,14 @@ class VpnService : VpnService() {
                 } catch (e: Exception) {}
             }
             tcpTable.clear()
-            // Proxy removed
+            
+            // Stop HTTP Proxy
+            try {
+                httpProxy?.stop()
+                httpProxy = null
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping proxy", e)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping VPN", e)
         }
