@@ -86,7 +86,37 @@ class CertificateManager {
   Future<bool> verifyInstallation() async {
     // At this phase we only verify presence.
     // Real trust verification requires HTTPS interception.
-    return await caExists();
+    final exists = await caExists();
+    if (!exists) {
+      Get.showSnackbar(
+        const GetSnackBar(
+          title: 'Certificate Not Found',
+          message: 'Please install the CA certificate first',
+          duration: Duration(seconds: 3),
+        ),
+      );
+      return false;
+    }
+
+    // Try to open security settings for certificate installation
+    try {
+      await const MethodChannel(
+        'com.example.packet_capture/methods',
+      ).invokeMethod('openSecuritySettings');
+    } catch (e) {
+      // Ignore if not implemented
+    }
+
+    Get.showSnackbar(
+      const GetSnackBar(
+        title: 'Certificate Verification',
+        message:
+            'Please ensure the CA certificate is installed in Security > Encryption & credentials > Install certificate',
+        duration: Duration(seconds: 5),
+      ),
+    );
+
+    return true;
   }
 
   /// Clears stored certificate + key

@@ -53,6 +53,11 @@ object CertificateGenerator {
             val caHeaderFile = File(context.filesDir, "ca.crt")
             val caKeyFile = File(context.filesDir, "ca.key")
 
+            if (!caHeaderFile.exists() || !caKeyFile.exists()) {
+                Log.d(TAG, "CA files missing. Generating new Root CA...")
+                generateAndSaveRootCa(context, caHeaderFile, caKeyFile)
+            }
+
             if (caHeaderFile.exists() && caKeyFile.exists()) {
                 loadCa(caHeaderFile, caKeyFile)
                 // Pre-generate a keypair for leaf certs
@@ -61,11 +66,70 @@ object CertificateGenerator {
                 sharedKeyPair = kpg.generateKeyPair()
                 Log.d(TAG, "CertificateGenerator initialized successfully")
             } else {
-                Log.e(TAG, "CA files not found in ${context.filesDir}")
+                Log.e(TAG, "FATAL: CA files still not found after generation attempt")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize CertificateGenerator", e)
         }
+    }
+
+    private fun generateAndSaveRootCa(context: Context, certFile: File, keyFile: File) {
+        try {
+            val kpg = KeyPairGenerator.getInstance("RSA", "BC")
+            kpg.initialize(2048)
+            val caKeyPair = kpg.generateKeyPair()
+
+            val issuer = X500Name("CN=PacketCapture CA, O=PacketCapture, L=Local")
+            val serial = BigInteger(64, SecureRandom())
+            val notBefore = Date(System.currentTimeMillis() - 1000 * 60 * 60)
+            val notAfter = Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24 * 365 * 10) // 10 years
+
+            val builder = JcaX509v3CertificateBuilder(
+                issuer,
+                serial,
+                notBefore,
+                notAfter,
+                issuer, // Self-signed
+                caKeyPair.public
+            )
+
+            builder.addExtension(Extension.basicConstraints, true, BasicConstraints(true))
+            builder.addExtension(
+                    Extension.keyUsage, true,
+                     org.bouncycastle.asn1.x509.KeyUsage(
+                             org.bouncycastle.asn1.x509.KeyUsage.keyCertSign or org.bouncycastle.asn1.x509.KeyUsage.cRLSign
+                     )
+            )
+
+            val signer = JcaContentSignerBuilder("SHA256WithRSAEncryption")
+                .setProvider("BC")
+                .build(caKeyPair.private)
+
+            val certHolder = builder.build(signer)
+            val cert = JcaX509CertificateConverter().setProvider("BC").getCertificate(certHolder)
+
+            // Save Cert
+            val certPem = convertToPem(cert)
+            certFile.writeText(certPem)
+
+            // Save Key
+            val keyPem = convertToPem(caKeyPair.private)
+            keyFile.writeText(keyPem)
+
+            Log.d(TAG, "Root CA generated and saved to ${context.filesDir}")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to generate Root CA", e)
+            throw e
+        }
+    }
+
+    private fun convertToPem(obj: Any): String {
+        val writer = java.io.StringWriter()
+        val pemWriter = org.bouncycastle.openssl.jcajce.JcaPEMWriter(writer)
+        pemWriter.writeObject(obj)
+        pemWriter.close()
+        return writer.toString()
     }
 
     private fun loadCa(certFile: File, keyFile: File) {

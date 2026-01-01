@@ -278,6 +278,10 @@ class TrafficController extends GetxController with GetTickerProviderStateMixin 
           "isSystemApp": request.isSystemApp,
         };
 
+        print(
+          "Flutter: Adding request with URL: ${requestMap['url']}, has requestBody: ${(requestMap['requestBody'] as String).isNotEmpty}, has responseBody: ${(requestMap['responseBody'] as String).isNotEmpty}",
+        );
+
         allRequests.insert(0, requestMap);
 
         // Cleanup old requests if limit exceeded (FIFO - First In, First Out)

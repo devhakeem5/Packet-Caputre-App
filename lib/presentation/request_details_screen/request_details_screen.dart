@@ -6,6 +6,7 @@ import '../../core/app_export.dart';
 import '../../core/widgets/custom_app_bar.dart';
 import './widgets/headers_tab_widget.dart';
 import './widgets/overview_tab_widget.dart';
+import './widgets/request_body_tab_widget.dart';
 import './widgets/response_tab_widget.dart';
 import './widgets/timing_tab_widget.dart';
 
@@ -23,7 +24,7 @@ class RequestDetailsScreen extends StatelessWidget {
     final theme = Theme.of(context);
 
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
         appBar: CustomAppBar(
@@ -59,6 +60,7 @@ class RequestDetailsScreen extends StatelessWidget {
                 children: [
                   OverviewTabWidget(requestData: requestData),
                   HeadersTabWidget(requestData: requestData),
+                  RequestBodyTabWidget(requestData: requestData),
                   ResponseTabWidget(requestData: requestData),
                   TimingTabWidget(requestData: requestData),
                 ],
@@ -181,6 +183,7 @@ class RequestDetailsScreen extends StatelessWidget {
         tabs: const [
           Tab(text: 'Overview'),
           Tab(text: 'Headers'),
+          Tab(text: 'Request'),
           Tab(text: 'Response'),
           Tab(text: 'Timing'),
         ],

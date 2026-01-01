@@ -6,6 +6,7 @@ import 'package:sizer/sizer.dart';
 import '../core/app_export.dart';
 import 'core/widgets/custom_error_widget.dart';
 
+//التطبيق الان ناقص فيه مشكلة خصوصا مع طلبات HTTP وHTTPS حتلى اللي مو مشفرة ما بيلتقط الurl بشكل صحيح وبيعطيني بداله ip او بيعرض domain فقط في حين تطبيقات اخرى تستخدم نفس الحركة تعطي النتيجة صحيحة المشكلة الثانية الانترنت يقطع في التطبيق والمشكلة الثالثة لا يلتقط ولا يعرض الbody سواء الخاص بالrequest او الresponse قم بحل هذه المشاكل بطريقة صحيحة تضمن التقاط كل شيء وايضا اعادة النتيجة للتطبيق الذي ارسل الطلب حتى لو اضطر الامر لتغيير الية الالتقاط المهم ان تضمن نجاح الالتقاط
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -33,6 +34,7 @@ void main() async {
     runApp(MyApp());
   });
 }
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 

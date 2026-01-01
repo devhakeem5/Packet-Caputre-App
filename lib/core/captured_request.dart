@@ -51,10 +51,12 @@ class CapturedRequest {
     // Use payloadSize if available, otherwise fall back to size
     final payloadSize = json['payloadSize'] as int? ?? json['size'] as int? ?? 0;
 
-    // Construct URL based on direction
-    final url = direction == "incoming"
-        ? "${protocol.toLowerCase()}://$srcIp:$srcPort"
-        : "${protocol.toLowerCase()}://$destIp:$destPort";
+    // Use the URL provided by the proxy server if available, otherwise construct from IP
+    final url =
+        json['url'] as String? ??
+        (direction == "incoming"
+            ? "${protocol.toLowerCase()}://$srcIp:$srcPort"
+            : "${protocol.toLowerCase()}://$destIp:$destPort");
 
     final domain = json['domain'] as String? ?? (direction == "incoming" ? srcIp : destIp);
 
@@ -63,9 +65,13 @@ class CapturedRequest {
     // Determine decryption status
     // 1. Explicit flag from native
     // 2. HTTP is always decrypted
-    // 3. Or implied by presence of headers
+    // 3. Or implied by presence of headers or body
     final bool isDecrypted =
-        json['isDecrypted'] as bool? ?? (protocol == "HTTP" || headersMap.isNotEmpty);
+        json['isDecrypted'] as bool? ??
+        (protocol == "HTTP" ||
+            headersMap.isNotEmpty ||
+            json['requestBody'] != null ||
+            json['responseBody'] != null);
 
     return CapturedRequest(
       id: UniqueKey().toString(),
@@ -73,10 +79,10 @@ class CapturedRequest {
       domain: domain,
       method: method,
       protocol: protocol,
-      statusCode: 200, // Placeholder
+      statusCode: json['statusCode'] as int? ?? 200, // Default to 200 if not provided
       requestSize: direction == "outgoing" ? payloadSize : 0,
       responseSize: direction == "incoming" ? payloadSize : 0,
-      responseTime: 0,
+      responseTime: json['responseTime'] as int? ?? 0,
       timestamp: timestamp,
       appName: json['appName'] as String? ?? "Unknown App",
       appPackage: json['package'] as String? ?? "unknown",
