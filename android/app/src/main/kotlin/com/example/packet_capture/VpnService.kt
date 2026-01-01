@@ -539,10 +539,14 @@ class VpnService : VpnService() {
                          session.clientSeq += payloadLen
                      }
 
-                     // Should Send Event?
-                     if (tracker != null && !tracker.eventSent && shouldSendEvent(tracker)) {
-                          sendAggregatedEvent(key, tracker, srcIp, destIp, srcPort, destPort, "TCP", meta)
-                          tracker.eventSent = true
+                     // Emit Event when BOTH request and response are parsed
+                     if (tracker != null && !tracker.eventSent) {
+                         if (tracker.requestParsed && tracker.responseParsed) {
+                             // Complete transaction available
+                             sendAggregatedEvent(key, tracker, srcIp, destIp, srcPort, destPort, "HTTP", meta)
+                             tracker.eventSent = true
+                             Log.d(TAG, "✓ Emitted complete HTTP transaction")
+                         }
                      }
 
                      // ACK
@@ -554,8 +558,13 @@ class VpnService : VpnService() {
                      tracker?.let { t ->
                          // Flush remaining buffer
                          processBufferedData(t, "outgoing", true)
-                         if (!t.eventSent && t.totalBytesSent > 0) {
-                             sendAggregatedEvent(key, t, srcIp, destIp, srcPort, destPort, "TCP", meta)
+                         if (!t.eventSent) {
+                             // Emit partial transaction on close
+                             if (t.requestParsed || t.responseParsed || t.totalBytesSent > 0) {
+                                 sendAggregatedEvent(key, t, srcIp, destIp, srcPort, destPort, "HTTP", meta)
+                                 t.eventSent = true
+                                 Log.d(TAG, "✓ Emitted partial HTTP on connection close")
+                             }
                          }
                      }
                      connectionData.remove(key)
@@ -631,12 +640,18 @@ class VpnService : VpnService() {
                  // Clean up connection tracker & Flush
                  connectionData[keyStr]?.let { tracker ->
                       processBufferedData(tracker, "incoming", true)
-                      if (!tracker.eventSent && tracker.totalBytesReceived > 0) {
-                          // We might need to construct a "response" event or update the existing one
-                          // For now, re-sending aggregated event might be duplicate if already sent.
-                          // But if we parsed something new, we should emit.
-                          // Let's assume aggregated event updates are handled by Flutter side or we send updates.
-                          // Ideally we send a "Final" event.
+                      if (!tracker.eventSent) {
+                          // Emit on remote close
+                          if (tracker.requestParsed || tracker.responseParsed || tracker.totalBytesReceived > 0) {
+                              val parts = keyStr.split(":")
+                              val meta = mutableMapOf<String, Any>(
+                                  "timestamp" to System.currentTimeMillis(),
+                                  "protocol" to "HTTP"
+                              )
+                              sendAggregatedEvent(keyStr, tracker, parts[0], parts[2], parts[1].toInt(), parts[3].toInt(), "HTTP", meta)
+                              tracker.eventSent = true
+                              Log.d(TAG, "✓ Emitted partial HTTP on remote close")
+                          }
                       }
                  }
                  connectionData.remove(keyStr)
@@ -1222,18 +1237,31 @@ class VpnService : VpnService() {
         }
         if (bytes.isEmpty()) return
 
-        // Parse based on direction
+        // CRITICAL: Scan ENTIRE buffer for HTTP signatures, not just start
         val consumedBytes = if (flowDirection == "outgoing") {
             if (!tracker.requestParsed) {
-                val consumed = tryParseRequest(bytes, tracker, isFlush)
-                if (consumed > 0) tracker.requestParsed = true
-                consumed
+                val httpStartIndex = findHttpRequestStart(bytes)
+                if (httpStartIndex >= 0) {
+                    // Discard junk bytes before HTTP
+                    val httpData = bytes.drop(httpStartIndex).toByteArray()
+                    val consumed = tryParseRequest(httpData, tracker, isFlush)
+                    if (consumed > 0) {
+                        tracker.requestParsed = true
+                        consumed + httpStartIndex // Total consumed including junk
+                    } else httpStartIndex // Consume junk only
+                } else 0
             } else 0
         } else {
             if (!tracker.responseParsed) {
-                val consumed = tryParseResponse(bytes, tracker, isFlush)
-                if (consumed > 0) tracker.responseParsed = true
-                consumed
+                val httpStartIndex = findHttpResponseStart(bytes)
+                if (httpStartIndex >= 0) {
+                    val httpData = bytes.drop(httpStartIndex).toByteArray()
+                    val consumed = tryParseResponse(httpData, tracker, isFlush)
+                    if (consumed > 0) {
+                        tracker.responseParsed = true
+                        consumed + httpStartIndex
+                    } else httpStartIndex
+                } else 0
             } else 0
         }
 
@@ -1252,32 +1280,44 @@ class VpnService : VpnService() {
         }
     }
 
-    private fun isRequestStart(data: ByteArray): Boolean {
-        if (data.size < 10) return false
-        val start = String(data.take(10).toByteArray(), Charsets.UTF_8).uppercase()
-        return start.startsWith("GET ") ||
-                start.startsWith("POST ") ||
-                start.startsWith("PUT ") ||
-                start.startsWith("DELETE ") ||
-                start.startsWith("HEAD ") ||
-                start.startsWith("OPTIONS ") ||
-                start.startsWith("PATCH ")
+    // CRITICAL: Scan ENTIRE buffer for HTTP request signatures
+    private fun findHttpRequestStart(data: ByteArray): Int {
+        if (data.size < 4) return -1
+        try {
+            val text = String(data, Charsets.ISO_8859_1)
+            val patterns = arrayOf("GET ", "POST ", "PUT ", "DELETE ", "HEAD ", "OPTIONS ", "PATCH ")
+            for (pattern in patterns) {
+                val index = text.indexOf(pattern)
+                if (index >= 0) return index
+            }
+        } catch (e: Exception) {}
+        return -1
     }
 
-    private fun isResponseStart(data: ByteArray): Boolean {
-        if (data.size < 10) return false
-        val start = String(data.take(10).toByteArray(), Charsets.UTF_8).uppercase()
-        return start.startsWith("HTTP/")
+    private fun findHttpResponseStart(data: ByteArray): Int {
+        if (data.size < 8) return -1
+        try {
+            val text = String(data, Charsets.ISO_8859_1)
+            val index = text.indexOf("HTTP/1.")
+            if (index >= 0) return index
+        } catch (e: Exception) {}
+        return -1
     }
 
     private fun tryParseRequest(data: ByteArray, tracker: ConnectionTracker?, isFlush: Boolean): Int {
         try {
-            // Find end of headers (\r\n\r\n)
+            // CRITICAL: Wait for complete headers first
             val headerEnd = findHeaderEnd(data)
-            if (headerEnd == -1) return 0 // Incomplete headers
+            if (headerEnd == -1) {
+                // Headers incomplete - WAIT for more data
+                if (isFlush && data.size > 100) {
+                    Log.w(TAG, "Request headers incomplete on flush, partial data: ${data.size} bytes")
+                }
+                return 0
+            }
 
             val headerBytes = data.take(headerEnd).toByteArray()
-            val headerString = String(headerBytes, Charsets.UTF_8)
+            val headerString = String(headerBytes, Charsets.ISO_8859_1)
             val lines = headerString.split("\r\n")
 
             if (lines.isEmpty()) return 0
@@ -1288,10 +1328,9 @@ class VpnService : VpnService() {
             if (parts.size >= 2) {
                 tracker?.httpMethod = parts[0]
                 tracker?.httpPath = parts[1]
-            }
+            } else return 0
 
             // Headers
-            // Logic similar to before but populating tracker
             for (i in 1 until lines.size) {
                  val line = lines[i]
                  val colonIndex = line.indexOf(":")
@@ -1303,14 +1342,12 @@ class VpnService : VpnService() {
                  }
             }
 
-            // Body
-            // Check Content-Length
-            val contentLength =
-                    tracker?.requestHeaders?.get("Content-Length")?.toIntOrNull() ?: 0
+            // Body - CRITICAL: Wait for COMPLETE body
+            val contentLength = tracker?.requestHeaders?.get("Content-Length")?.toIntOrNull() ?: 0
             val totalNeeded = headerEnd + 4 + contentLength
             
             if (data.size >= totalNeeded) {
-                // We have the full body
+                // Complete request available
                 if (contentLength > 0) {
                      val bodyBytes = data.drop(headerEnd + 4).take(contentLength).toByteArray()
                      val contentType = tracker?.requestHeaders?.get("Content-Type") ?: ""
@@ -1320,10 +1357,10 @@ class VpnService : VpnService() {
                          tracker?.requestBody = "[Binary Data: $contentLength bytes]"
                      }
                 }
+                Log.d(TAG, "✓ Parsed HTTP Request: ${tracker?.httpMethod} ${tracker?.httpPath}")
                 return totalNeeded
             } else if (isFlush && data.size > headerEnd + 4) {
-                // PARTIAL BODY (Flush)
-                // We take whatever is available
+                // Connection closed with partial body
                 val availableBody = data.size - (headerEnd + 4)
                 val bodyBytes = data.drop(headerEnd + 4).toByteArray()
                 val contentType = tracker?.requestHeaders?.get("Content-Type") ?: ""
@@ -1332,11 +1369,15 @@ class VpnService : VpnService() {
                  } else {
                      tracker?.requestBody = "[Binary Data: $availableBody bytes (Truncated)]"
                  }
-                 return data.size // Consume all
+                 Log.d(TAG, "✓ Parsed HTTP Request (Partial): ${tracker?.httpMethod} ${tracker?.httpPath}")
+                 return data.size
             } else {
-                return 0 // Wait for more data
+                // Waiting for body - DO NOT consume
+                Log.d(TAG, "Waiting for request body: have ${data.size}, need $totalNeeded")
+                return 0
             }
         } catch (e: Exception) {
+            Log.e(TAG, "Request parse error", e)
             return 0
         }
     }
@@ -1344,10 +1385,16 @@ class VpnService : VpnService() {
     private fun tryParseResponse(data: ByteArray, tracker: ConnectionTracker?, isFlush: Boolean): Int {
         try {
             val headerEnd = findHeaderEnd(data)
-            if (headerEnd == -1) return 0
+            if (headerEnd == -1) {
+                // Headers incomplete - WAIT
+                if (isFlush && data.size > 100) {
+                    Log.w(TAG, "Response headers incomplete on flush")
+                }
+                return 0
+            }
 
             val headerBytes = data.take(headerEnd).toByteArray()
-            val headerString = String(headerBytes, Charsets.UTF_8)
+            val headerString = String(headerBytes, Charsets.ISO_8859_1)
             val lines = headerString.split("\r\n")
 
             if (lines.isEmpty()) return 0
@@ -1356,7 +1403,7 @@ class VpnService : VpnService() {
             val statusParts = statusLine.split(" ")
             if (statusParts.size >= 2) {
                 tracker?.statusCode = statusParts[1].toIntOrNull() ?: 200
-            }
+            } else return 0
 
              for (i in 1 until lines.size) {
                  val line = lines[i]
@@ -1366,38 +1413,41 @@ class VpnService : VpnService() {
                      val value = line.substring(colonIndex + 1).trim()
                      tracker?.responseHeaders?.put(key, value)
                  }
-            }
-            
-            val contentLength =
-                    tracker?.responseHeaders?.get("Content-Length")?.toIntOrNull() ?: 0
-            val totalNeeded = headerEnd + 4 + contentLength
+             }
+             
+             val contentLength = tracker?.responseHeaders?.get("Content-Length")?.toIntOrNull() ?: 0
+             val totalNeeded = headerEnd + 4 + contentLength
 
-            if (data.size >= totalNeeded) {
-                 if (contentLength > 0) {
-                     val bodyBytes = data.drop(headerEnd + 4).take(contentLength).toByteArray()
-                     val contentType = tracker?.responseHeaders?.get("Content-Type") ?: ""
-                     if (!isBinaryContentType(contentType)) {
-                         tracker?.responseBody = String(bodyBytes, Charsets.UTF_8)
-                     } else {
-                         tracker?.responseBody = "[Binary Data: $contentLength bytes]"
-                     }
-                 }
-                 return totalNeeded
-            } else if (isFlush && data.size > headerEnd + 4) {
-                 // Partial Body (Flush)
-                 val availableBody = data.size - (headerEnd + 4)
-                 val bodyBytes = data.drop(headerEnd + 4).toByteArray()
-                 val contentType = tracker?.responseHeaders?.get("Content-Type") ?: ""
-                 if (!isBinaryContentType(contentType)) {
-                     tracker?.responseBody = String(bodyBytes, Charsets.UTF_8) + "\n[Truncated]"
-                 } else {
-                     tracker?.responseBody = "[Binary Data: $availableBody bytes (Truncated)]"
-                 }
-                 return data.size
-            } else {
-                 return 0
-            }
+             if (data.size >= totalNeeded) {
+                  // Complete response
+                  if (contentLength > 0) {
+                      val bodyBytes = data.drop(headerEnd + 4).take(contentLength).toByteArray()
+                      val contentType = tracker?.responseHeaders?.get("Content-Type") ?: ""
+                      if (!isBinaryContentType(contentType)) {
+                          tracker?.responseBody = String(bodyBytes, Charsets.UTF_8)
+                      } else {
+                          tracker?.responseBody = "[Binary Data: $contentLength bytes]"
+                      }
+                  }
+                  Log.d(TAG, "✓ Parsed HTTP Response: ${tracker?.statusCode}")
+                  return totalNeeded
+             } else if (isFlush && data.size > headerEnd + 4) {
+                  val availableBody = data.size - (headerEnd + 4)
+                  val bodyBytes = data.drop(headerEnd + 4).toByteArray()
+                  val contentType = tracker?.responseHeaders?.get("Content-Type") ?: ""
+                  if (!isBinaryContentType(contentType)) {
+                      tracker?.responseBody = String(bodyBytes, Charsets.UTF_8) + "\n[Truncated]"
+                  } else {
+                      tracker?.responseBody = "[Binary Data: $availableBody bytes (Truncated)]"
+                  }
+                  Log.d(TAG, "✓ Parsed HTTP Response (Partial): ${tracker?.statusCode}")
+                  return data.size
+             } else {
+                  Log.d(TAG, "Waiting for response body: have ${data.size}, need $totalNeeded")
+                  return 0
+             }
         } catch (e: Exception) {
+            Log.e(TAG, "Response parse error", e)
             return 0
         }
     }
@@ -1415,12 +1465,8 @@ class VpnService : VpnService() {
         return -1
     }
 
-    private fun shouldSendEvent(tracker: ConnectionTracker): Boolean {
-        return tracker.httpMethod != null ||
-                tracker.statusCode != null ||
-                tracker.serverName != null ||
-                (tracker.totalBytesSent > 0 && tracker.totalBytesReceived > 0)
-    }
+    // REMOVED - Using explicit request+response check instead
+    // private fun shouldSendEvent(tracker: ConnectionTracker): Boolean
 
     private fun sendAggregatedEvent(
             key: String,
